@@ -1,0 +1,7 @@
+env
+venv
+
+graphify-out
+__pycache__
+media
+logs
