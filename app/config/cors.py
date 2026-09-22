@@ -40,6 +40,14 @@ class CORSSettings(BaseSettings):
         validation_alias=AliasChoices("cors__allow_credentials", "cors_allow_credentials", "cors_allowed_credentials"),
     )
 
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        case_sensitive=False,
+        populate_by_name=True,
+    )
+
     @field_validator("allowed_origins", "allowed_methods", "allowed_headers", mode="before")
     @classmethod
     def parse_list(cls, v: Union[str, list, None]) -> list:

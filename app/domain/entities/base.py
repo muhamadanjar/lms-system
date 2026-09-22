@@ -1,51 +1,40 @@
-from datetime import datetime
-from typing import Optional, Any
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from uuid import UUID, uuid4
-from pydantic import BaseModel, Field, model_validator
+
+from app.domain.exceptions import ValidationError
+from app.domain.value_objects.content import ContentStatus, Slug
 
 
-class BaseEntity(BaseModel):
-    id: Optional[UUID] = Field(default_factory=uuid4)
-    created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
-    updated_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
-    deleted_at: Optional[datetime] = Field(default=None)
-    is_active: bool = Field(default=True)
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
-    @model_validator(mode='before')
-    @classmethod
-    def skip_unloaded_relationships(cls, data: Any) -> Any:
-        """
-        Special validator to handle SQLAlchemy models in async environments.
-        It prevents Pydantic from accessing unloaded relationships which would
-        trigger a lazy load and cause MissingGreenlet error.
-        """
-        if not isinstance(data, dict) and hasattr(data, '_sa_instance_state'):
-            try:
-                from sqlalchemy import inspect
-                state = inspect(data)
 
-                # Create a dict with only loaded attributes
-                loaded_data = {}
-                try:
-                    attrs = state.mapper.attrs.keys()
-                except Exception:
-                    # If mapper inspection fails, return data as-is
-                    return data
+@dataclass
+class BaseEntity:
+    id: UUID = field(default_factory=uuid4)
+    created_at: datetime = field(default_factory=utc_now)
+    updated_at: datetime = field(default_factory=utc_now)
 
-                for key in attrs:
-                    try:
-                        if key not in state.unloaded:
-                            loaded_data[key] = getattr(data, key)
-                    except (AttributeError, Exception):
-                        # Skip attributes that can't be accessed
-                        continue
+    def touch(self) -> None:
+        self.updated_at = utc_now()
 
-                return loaded_data if loaded_data else data
-            except Exception:
-                # If anything goes wrong, return original data
-                return data
 
-        return data
+@dataclass
+class ContentEntity(BaseEntity):
+    slug: Slug = field(default_factory=lambda: Slug("content"))
+    status: ContentStatus = ContentStatus.DRAFT
 
-    class Config:
-        from_attributes = True # Allow creating from ORM model
+    def __post_init__(self) -> None:
+        if self.created_at.tzinfo is None or self.updated_at.tzinfo is None:
+            raise ValidationError("created_at and updated_at must be timezone-aware")
+        if self.updated_at < self.created_at:
+            raise ValidationError("updated_at cannot precede created_at")
+
+    def change_slug(self, slug: str) -> None:
+        if str(self.slug) != slug:
+            raise ValidationError("content slugs are immutable")
+
+    def change_status(self, status: ContentStatus) -> None:
+        self.status = ContentStatus(status)
+        self.touch()

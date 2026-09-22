@@ -3,6 +3,8 @@ from app.infrastructure.database.manager import database_manager
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import Session
 
+from app.infrastructure.persistence.unit_of_work import SqlModelUnitOfWork
+
 
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     """
@@ -32,3 +34,13 @@ def get_db_session(db_name: str = "default") -> Callable[[], AsyncGenerator[Asyn
 
 # Alias for backward compatibility or shorthand
 get_db = get_async_session
+
+
+async def get_uow() -> AsyncGenerator[SqlModelUnitOfWork, None]:
+    """Provide one async persistence unit of work for a request."""
+    session = await database_manager.create_async_session("default")
+    uow = SqlModelUnitOfWork(session=session)
+    try:
+        yield uow
+    finally:
+        await session.close()

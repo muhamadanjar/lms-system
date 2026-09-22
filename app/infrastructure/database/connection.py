@@ -4,8 +4,7 @@ import logging
 from typing import AsyncIterator, Iterator, Optional
 from contextlib import asynccontextmanager, contextmanager
 
-from sqlalchemy import Engine
-from sqlalchemy import Engine
+from sqlalchemy import Engine, event, text
 from sqlalchemy.ext.asyncio import (
     create_async_engine,
     async_sessionmaker,
@@ -34,13 +33,13 @@ class DatabaseConnection:
 
     def _get_sync_engine_config(self) -> dict:
         """Build kwargs for sync engine (psycopg2/pymysql)."""
-        config_dict = self.config.engine_kwargs.copy()
         db_url = self.config.get_database_url(sync=True)
 
         if "sqlite" in db_url:
-            config_dict["connect_args"] = {"check_same_thread": False}
+            config_dict = {"echo": self.config.debug, "connect_args": {"check_same_thread": False}}
             config_dict["poolclass"] = StaticPool if ":memory:" in db_url else QueuePool
         else:
+            config_dict = self.config.engine_kwargs.copy()
             config_dict["poolclass"] = QueuePool
             config_dict["connect_args"] = {
                 "connect_timeout": getattr(self.config, "connect_timeout", 10)
@@ -50,12 +49,12 @@ class DatabaseConnection:
 
     def _get_async_engine_config(self) -> dict:
         """Build kwargs for async engine (asyncpg/aiomysql/aiosqlite)."""
-        config_dict = self.config.async_engine_kwargs.copy()
-        db_url = self.config.get_database_url(sync=True)
+        db_url = self.config.get_database_url(sync=False)
 
         if "sqlite" in db_url:
-            config_dict["connect_args"] = {"check_same_thread": False}
-        elif "postgresql" in db_url:
+            return {"echo": self.config.debug, "connect_args": {"check_same_thread": False}}
+        config_dict = self.config.async_engine_kwargs.copy()
+        if "postgresql" in db_url:
             # asyncpg uses 'timeout', not 'connect_timeout'
             config_dict["connect_args"] = {
                 "timeout": getattr(self.config, "connect_timeout", 10)
@@ -73,6 +72,12 @@ class DatabaseConnection:
         try:
             sync_url = self.config.get_database_url(sync=True)
             engine = create_engine(sync_url, **self._get_sync_engine_config())
+            if "sqlite" in sync_url:
+                @event.listens_for(engine, "connect")
+                def _enable_sqlite_foreign_keys(dbapi_connection, _connection_record):
+                    cursor = dbapi_connection.cursor()
+                    cursor.execute("PRAGMA foreign_keys=ON")
+                    cursor.close()
             logger.info(f"Sync engine '{self.name}' created.")
             return engine
         except Exception as e:
@@ -84,6 +89,12 @@ class DatabaseConnection:
         try:
             async_url = self.config.get_database_url(sync=False)
             engine = create_async_engine(async_url, **self._get_async_engine_config())
+            if "sqlite" in async_url:
+                @event.listens_for(engine.sync_engine, "connect")
+                def _enable_async_sqlite_foreign_keys(dbapi_connection, _connection_record):
+                    cursor = dbapi_connection.cursor()
+                    cursor.execute("PRAGMA foreign_keys=ON")
+                    cursor.close()
             logger.info(f"Async engine '{self.name}' created.")
             return engine
         except Exception as e:
@@ -181,9 +192,12 @@ class DatabaseConnection:
             return False
 
     async def create_tables(self) -> None:
+        """Create tables for isolated smoke tests; production uses Alembic."""
+        from app.infrastructure.persistence.model_registry import metadata
+
         engine = await self.get_async_engine()
         async with engine.begin() as conn:
-            await conn.run_sync(SQLModel.metadata.create_all)
+            await conn.run_sync(metadata.create_all)
 
     async def create_async_session(self) -> AsyncSession:
         """
