@@ -12,5 +12,6 @@ def test_migration_chain_is_reversible_and_has_head():
         "0001_initial_content_hierarchy",
         "0002_typed_section_content",
         "0003_remote_server",
+        "0004_quiz_sitting_results",
     }
-    assert scripts.get_current_head() == "0003_remote_server"
+    assert scripts.get_current_head() == "0004_quiz_sitting_results"

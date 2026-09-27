@@ -15,29 +15,3 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["app*"]
-
-# python-semantic-release v10.
-# Justifikasi dependency (CI-only, tidak masuk requirements.txt runtime):
-# - otomatis bump SemVer + tag + changelog + GitHub Release dari conventional commits
-# - consumer: .github/workflows/release.yml (job release, trigger push ke main)
-[tool.semantic_release]
-version_toml = [
-    "pyproject.toml:project.version",
-]
-version_variables = [
-    "app/__init__.py:__version__",
-]
-tag_format = "v{version}"
-major_on_zero = false
-allow_zero_version = true
-commit_version_number = true
-commit_subject = "chore(release): v{version} [skip ci]"
-build_command = "echo 'no build artifacts'"
-
-[tool.semantic_release.commit_author]
-name = "semantic-release"
-email = "semantic-release@users.noreply.github.com"
-
-[tool.semantic_release.branches.main]
-match = "main"
-prerelease = false

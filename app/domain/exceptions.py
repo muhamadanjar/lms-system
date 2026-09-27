@@ -16,3 +16,7 @@ class NotFoundError(DomainError):
 
 class InvalidTransitionError(DomainError):
     """Raised when a status or quiz-attempt transition is not allowed."""
+
+
+class AuthorizationError(DomainError):
+    """Raised when an authenticated actor cannot perform a use case."""

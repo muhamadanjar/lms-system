@@ -21,3 +21,4 @@ media
 logs
 .mypy_cache/
 .ruff_cache/
+.codebase-memory

@@ -1,17 +1,15 @@
 name: Release
 
-# Semantic release berjalan ketika ada merge/push ke main.
-# - conventional commits menentukan bump: fix -> patch, feat -> minor,
-#   BREAKING CHANGE -> major (major_on_zero=false, jadi feat tetap minor di 0.x)
-# - membuat tag vX.Y.Z + CHANGELOG.md + GitHub Release otomatis
-# - commit release memakai [skip ci] agar tidak loop
+# Semantic Release runs only after a push to a production branch.
+# Conventional Commits determine the next numeric X.Y.Z version.
 on:
   push:
     branches:
       - main
+      - master
 
 concurrency:
-  group: release-main
+  group: release-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -49,21 +47,23 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          python-version-file: .python-version
-          cache: pip
-
-      - name: Install semantic-release
-        run: |
-          python -m pip install --upgrade pip
-          pip install "python-semantic-release==10.*"
+          node-version: '24'
 
       - name: Verify config
-        run: semantic-release --version && semantic-release generate-config
+        run: |
+          npx --yes --package=semantic-release@25.0.9 semantic-release --version
+          node -e "JSON.parse(require('node:fs').readFileSync('.releaserc.json', 'utf8'))"
 
       - name: Release (version + tag + changelog + GitHub Release)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: semantic-release version
+        run: |
+          npx --yes \
+            --package=semantic-release@25.0.9 \
+            --package=@semantic-release/changelog@7.0.0 \
+            --package=@semantic-release/exec@7.1.0 \
+            --package=@semantic-release/git@11.0.1 \
+            semantic-release

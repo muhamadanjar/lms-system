@@ -7,6 +7,8 @@ class UnitOfWorkPort(ABC):
     sections: object
     slugs: object
     servers: object
+    quizzes: object
+    sittings: object
 
     @abstractmethod
     async def __aenter__(self): ...

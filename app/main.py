@@ -21,6 +21,7 @@ from app.presentation.routers.courses import router as courses_router
 from app.presentation.routers.modules import router as modules_router
 from app.presentation.routers.sections import router as sections_router
 from app.presentation.routers.servers import router as servers_router
+from app.presentation.routers.quizzes import router as quizzes_router
 from app.presentation.websocket.console import get_console_registry, ws_router as console_ws_router
 
 settings = get_settings()
@@ -57,6 +58,7 @@ app.include_router(courses_router)
 app.include_router(modules_router)
 app.include_router(sections_router)
 app.include_router(servers_router)
+app.include_router(quizzes_router)
 app.include_router(console_ws_router)
 app.add_exception_handler(DomainError, handle_domain_error)
 app.add_exception_handler(IntegrityError, handle_integrity_error)

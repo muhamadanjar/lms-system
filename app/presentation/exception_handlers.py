@@ -3,7 +3,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 
-from app.domain.exceptions import ConflictError, DomainError, NotFoundError
+from app.domain.exceptions import AuthorizationError, ConflictError, DomainError, NotFoundError
 
 
 def _error(request: Request, code: str, message: str, status_code: int) -> JSONResponse:
@@ -22,7 +22,13 @@ def _error(request: Request, code: str, message: str, status_code: int) -> JSONR
 async def handle_domain_error(request: Request, exc: DomainError) -> JSONResponse:
     if isinstance(exc, NotFoundError):
         return _error(request, "RESOURCE_NOT_FOUND", str(exc), 404)
+    if isinstance(exc, AuthorizationError):
+        return _error(request, "FORBIDDEN", str(exc), 403)
     if isinstance(exc, ConflictError):
+        if str(exc) == "EXAM_ATTEMPT_LIMIT_REACHED":
+            return _error(request, "EXAM_ATTEMPT_LIMIT_REACHED", str(exc), 409)
+        if "question_code" in str(exc):
+            return _error(request, "QUESTION_CODE_CONFLICT", str(exc), 409)
         return _error(request, "RESOURCE_CONFLICT", str(exc), 409)
     return _error(request, "VALIDATION_ERROR", str(exc), 422)
 
