@@ -3,6 +3,7 @@ from pydantic import AliasChoices, Field
 from functools import lru_cache
 from .cors import CORSSettings
 from .database import DatabaseSettings
+from .ssh import SSHConsoleSettings
 from .usermanagement import UserManagementSettings
 
 
@@ -18,6 +19,7 @@ class Settings(BaseSettings):
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     cors: CORSSettings = Field(default_factory=CORSSettings)
     usermanagement: UserManagementSettings = Field(default_factory=UserManagementSettings)
+    ssh: SSHConsoleSettings = Field(default_factory=SSHConsoleSettings)
 
     model_config = SettingsConfigDict(
         env_file=".env",

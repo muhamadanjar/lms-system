@@ -29,6 +29,7 @@ class PaginationQuery(BaseModel):
     page_size: int = Field(default=20, ge=1, le=100)
     status: ContentStatus | None = None
     include_archived: bool = False
+    search: str | None = Field(default=None, max_length=120)
 
 
 class CourseCreate(BaseModel):

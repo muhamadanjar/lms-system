@@ -24,7 +24,7 @@ def use_cases(uow: SqlModelUnitOfWork) -> ContentCrudUseCases:
 
 
 def can_manage(user: CurrentUser) -> bool:
-    return user.has_any_role(("admin", "instructor"))
+    return user.is_superuser or user.has_any_role(("admin", "instructor"))
 
 
 def read_filter(query: PaginationQuery, user: CurrentUser) -> tuple[ContentStatus | None, bool]:

@@ -3,13 +3,21 @@ from collections.abc import Callable
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.application.ports.unit_of_work import UnitOfWorkPort
+from app.config.config import get_settings
+from app.infrastructure.crypto.aesgcm import AesGcmCredentialCipher, encode_credential_key
 from app.infrastructure.persistence.repositories.content_slug_repository import SqlModelContentSlugRegistry
 from app.infrastructure.persistence.repositories.course_repository import SqlModelCourseRepository
 from app.infrastructure.persistence.repositories.lab_environment_repository import SqlModelLabEnvironmentRepository
 from app.infrastructure.persistence.repositories.module_repository import SqlModelModuleRepository
 from app.infrastructure.persistence.repositories.quiz_repository import SqlModelQuizRepository
 from app.infrastructure.persistence.repositories.quiz_sitting_repository import SqlModelQuizSittingRepository
+from app.infrastructure.persistence.repositories.remote_server_repository import SqlModelRemoteServerRepository
 from app.infrastructure.persistence.repositories.section_repository import SqlModelSectionRepository
+
+
+def default_credential_cipher() -> AesGcmCredentialCipher:
+    settings = get_settings().ssh
+    return AesGcmCredentialCipher(encode_credential_key(settings.credential_enc_key), settings.credential_key_version)
 
 
 class SqlModelUnitOfWork(UnitOfWorkPort):
@@ -32,6 +40,7 @@ class SqlModelUnitOfWork(UnitOfWorkPort):
         self.labs = SqlModelLabEnvironmentRepository(self.session, self.slugs)
         self.quizzes = SqlModelQuizRepository(self.session, self.slugs)
         self.sittings = SqlModelQuizSittingRepository(self.session, self.slugs)
+        self.servers = SqlModelRemoteServerRepository(self.session, default_credential_cipher)
         return self
 
     async def __aexit__(self, exc_type, exc, tb):

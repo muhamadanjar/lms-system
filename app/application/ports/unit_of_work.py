@@ -6,6 +6,7 @@ class UnitOfWorkPort(ABC):
     modules: object
     sections: object
     slugs: object
+    servers: object
 
     @abstractmethod
     async def __aenter__(self): ...

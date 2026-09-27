@@ -1,6 +1,7 @@
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app import __version__
 from app.config.config import get_settings
 
 from contextlib import asynccontextmanager
@@ -19,6 +20,8 @@ from fastapi.exceptions import RequestValidationError
 from app.presentation.routers.courses import router as courses_router
 from app.presentation.routers.modules import router as modules_router
 from app.presentation.routers.sections import router as sections_router
+from app.presentation.routers.servers import router as servers_router
+from app.presentation.websocket.console import get_console_registry, ws_router as console_ws_router
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -35,12 +38,13 @@ async def lifespan(app: FastAPI):
     yield
 
     logger.info("Application shutting down...")
+    get_console_registry().release_all()
 
     await database_manager.disconnect()
     logger.info("Database connections closed")
     logger.info("Application closed")
 
-app = FastAPI(title=settings.project_name, debug=settings.debug, lifespan=lifespan)
+app = FastAPI(title=settings.project_name, version=__version__, debug=settings.debug, lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors.allowed_origins,
@@ -52,6 +56,8 @@ app.include_router(health_router)
 app.include_router(courses_router)
 app.include_router(modules_router)
 app.include_router(sections_router)
+app.include_router(servers_router)
+app.include_router(console_ws_router)
 app.add_exception_handler(DomainError, handle_domain_error)
 app.add_exception_handler(IntegrityError, handle_integrity_error)
 app.add_exception_handler(HTTPException, handle_http_error)

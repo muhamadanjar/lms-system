@@ -1,7 +1,13 @@
+import base64
+import os
+
 import pytest_asyncio
 from sqlmodel import Session, create_engine
 
 from app.infrastructure.persistence.model_registry import metadata
+
+if "SSH_CREDENTIAL_ENC_KEY" not in os.environ:
+    os.environ["SSH_CREDENTIAL_ENC_KEY"] = base64.b64encode(os.urandom(32)).decode()
 
 
 class SyncAsyncSessionAdapter:

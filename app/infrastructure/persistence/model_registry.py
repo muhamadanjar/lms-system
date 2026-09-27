@@ -10,6 +10,7 @@ from app.infrastructure.persistence.models.module import Module
 from app.infrastructure.persistence.models.question import Question
 from app.infrastructure.persistence.models.quiz import Quiz
 from app.infrastructure.persistence.models.quiz_sitting import QuizSitting
+from app.infrastructure.persistence.models.remote_server import RemoteServer
 from app.infrastructure.persistence.models.section import Section
 
 __all__ = [
@@ -21,6 +22,7 @@ __all__ = [
     "Question",
     "Quiz",
     "QuizSitting",
+    "RemoteServer",
     "Section",
     "SQLModel",
 ]

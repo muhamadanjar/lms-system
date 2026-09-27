@@ -12,7 +12,23 @@ class AuthServiceRejected(Exception):
     """User Management API rejected the supplied token."""
 
 
+def _normalize_role(role: object) -> str:
+    """Extract the role name from a RoleSerializer object or plain string."""
+    if isinstance(role, dict):
+        return str(role.get("name", "")).lower()
+    return str(role).lower()
+
+
 class UserManagementAuthClient:
+    """Client for the User Management API auth endpoints.
+
+    Contract with GET {base_url}/auth/info: 200 returns the APIResponse
+    envelope ``{"success": true, "data": {...user...}, "message": ...}``
+    where ``data.roles`` are ``{"id","name",...}`` objects (not plain
+    strings) and ``data.permissions`` are permission name strings.
+    A bare (unenveloped) user object is also accepted for tolerance.
+    """
+
     def __init__(self, settings: UserManagementSettings):
         self.settings = settings
 
@@ -34,9 +50,19 @@ class UserManagementAuthClient:
             raise AuthServiceRejected
 
         try:
-            payload = response.json()
+            body = response.json()
+        except ValueError as exc:
+            raise AuthServiceRejected from exc
+        if not isinstance(body, dict):
+            raise AuthServiceRejected
+        payload = body.get("data", body)
+        if not isinstance(payload, dict):
+            raise AuthServiceRejected
+        try:
             user_id = str(payload["id"])
-            roles = frozenset(str(role).lower() for role in payload.get("roles", []))
+            roles = frozenset(
+                name for name in (_normalize_role(role) for role in payload.get("roles", [])) if name
+            )
             permissions = frozenset(str(permission) for permission in payload.get("permissions", []))
         except (KeyError, TypeError, ValueError) as exc:
             raise AuthServiceRejected from exc
@@ -45,4 +71,5 @@ class UserManagementAuthClient:
             email=payload.get("email"),
             roles=roles,
             permissions=permissions,
+            is_superuser=bool(payload.get("is_superuser", False)),
         )

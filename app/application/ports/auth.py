@@ -8,9 +8,13 @@ class CurrentUser:
     email: str | None = None
     roles: frozenset[str] = field(default_factory=frozenset)
     permissions: frozenset[str] = field(default_factory=frozenset)
+    is_superuser: bool = False
 
     def has_any_role(self, roles: Sequence[str]) -> bool:
         return bool(self.roles.intersection(roles))
+
+    def has_permission(self, permissions: Sequence[str]) -> bool:
+        return bool(self.permissions.intersection(permissions))
 
 
 class AuthInfoProvider(Protocol):
