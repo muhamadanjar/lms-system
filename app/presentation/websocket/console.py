@@ -30,6 +30,24 @@ def get_console_registry() -> InMemoryConsoleRegistry:
     return _registry
 
 
+async def user_may_open_console(user, server_id: UUID) -> bool:
+    """Admin/permission holders pass; learners only via their course lab access."""
+    if user is None:
+        return False
+    if user.is_superuser or user.has_permission(("servers.view", "servers.console")):
+        return True
+    try:
+        from app.application.use_cases.lab_enrollment import LabEnrollmentUseCases
+
+        async def uow_factory():
+            session = await database_manager.create_async_session("default")
+            return SqlModelUnitOfWork(session=session)
+
+        return await LabEnrollmentUseCases(uow_factory).user_has_course_server(user.id, server_id)
+    except Exception:
+        return False
+
+
 def create_console_use_case(
     uow_factory,
     cipher,
@@ -134,7 +152,7 @@ async def console_websocket(ws: WebSocket, server_id: UUID):
         await ws.send_text(json.dumps(_frame_closed("auth_error")))
         await ws.close(code=4401)
         return
-    if user is None or (not user.is_superuser and not user.has_permission(("servers.view", "servers.console"))):
+    if not await user_may_open_console(user, server_id):
         await ws.accept()
         await ws.send_text(json.dumps(_frame_closed("auth_error")))
         await ws.close(code=4403)

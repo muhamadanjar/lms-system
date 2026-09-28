@@ -10,7 +10,6 @@ from app.domain.exceptions import NotFoundError, ValidationError
 from app.infrastructure.persistence.mappers.content_mapper import to_module
 from app.infrastructure.persistence.models.module import Module as ModuleRow
 from app.infrastructure.persistence.models.answer import Answer
-from app.infrastructure.persistence.models.lab_environment_settings import LabEnvironmentSettings
 from app.infrastructure.persistence.models.question import Question
 from app.infrastructure.persistence.models.quiz import Quiz
 from app.infrastructure.persistence.models.quiz_sitting import QuizSitting
@@ -80,7 +79,6 @@ class SqlModelModuleRepository:
             return False
         sections = list((await self.session.exec(select(SectionRow).where(SectionRow.module_id == module_id))).all())
         section_ids = [section.id for section in sections]
-        labs = list((await self.session.exec(select(LabEnvironmentSettings).where(LabEnvironmentSettings.section_id.in_(section_ids)))).all()) if section_ids else []
         quizzes = list((await self.session.exec(select(Quiz).where(Quiz.section_id.in_(section_ids)))).all()) if section_ids else []
         quiz_ids = [quiz.id for quiz in quizzes]
         questions = list((await self.session.exec(select(Question).where(Question.quiz_id.in_(quiz_ids)))).all()) if quiz_ids else []
@@ -93,10 +91,8 @@ class SqlModelModuleRepository:
         if quiz_ids:
             await self.session.execute(delete(QuizSitting).where(QuizSitting.quiz_id.in_(quiz_ids)))
             await self.session.execute(delete(Quiz).where(Quiz.id.in_(quiz_ids)))
-        if section_ids:
-            await self.session.execute(delete(LabEnvironmentSettings).where(LabEnvironmentSettings.section_id.in_(section_ids)))
         await self.session.execute(delete(SectionRow).where(SectionRow.module_id == module_id))
-        await self.slugs.release_ids([module_id, *section_ids, *quiz_ids, *question_ids, *[x.id for x in answers], *[x.id for x in labs], *[x.id for x in sittings]])
+        await self.slugs.release_ids([module_id, *section_ids, *quiz_ids, *question_ids, *[x.id for x in answers], *[x.id for x in sittings]])
         await self.session.delete(row)
         await self.session.flush()
         return True

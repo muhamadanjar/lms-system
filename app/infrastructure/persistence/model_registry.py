@@ -5,7 +5,7 @@ from sqlmodel import SQLModel
 from app.infrastructure.persistence.models.answer import Answer
 from app.infrastructure.persistence.models.content_slug_registry import ContentSlugRegistry
 from app.infrastructure.persistence.models.course import Course
-from app.infrastructure.persistence.models.lab_environment_settings import LabEnvironmentSettings
+from app.infrastructure.persistence.models.course_lab_access import CourseLabAccess
 from app.infrastructure.persistence.models.module import Module
 from app.infrastructure.persistence.models.question import Question
 from app.infrastructure.persistence.models.quiz import Quiz
@@ -23,7 +23,7 @@ __all__ = [
     "Answer",
     "ContentSlugRegistry",
     "Course",
-    "LabEnvironmentSettings",
+    "CourseLabAccess",
     "Module",
     "Question",
     "QuestionCodeSequence",

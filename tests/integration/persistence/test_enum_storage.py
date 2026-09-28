@@ -8,8 +8,6 @@ from app.infrastructure.persistence.model_registry import metadata
 ENUM_COLUMNS = (
     ("answers", "status"),
     ("courses", "status"),
-    ("lab_environment_settings", "status"),
-    ("lab_environment_settings", "access_method"),
     ("modules", "status"),
     ("questions", "status"),
     ("questions", "question_type"),

@@ -13,7 +13,7 @@ from app.infrastructure.persistence.mappers.content_mapper import to_course, to_
 from app.infrastructure.persistence.models.answer import Answer
 from app.infrastructure.persistence.models.content_slug_registry import ContentSlugRegistry
 from app.infrastructure.persistence.models.course import Course as CourseRow
-from app.infrastructure.persistence.models.lab_environment_settings import LabEnvironmentSettings
+from app.infrastructure.persistence.models.course_lab_access import CourseLabAccess
 from app.infrastructure.persistence.models.module import Module as ModuleRow
 from app.infrastructure.persistence.models.question import Question
 from app.infrastructure.persistence.models.quiz import Quiz
@@ -99,18 +99,17 @@ class SqlModelCourseRepository:
         question_rows = list((await self.session.exec(select(Question).where(Question.quiz_id.in_(quiz_ids)))).all()) if quiz_ids else []
         question_ids = [row.id for row in question_rows]
         answer_rows = list((await self.session.exec(select(Answer).where(Answer.question_id.in_(question_ids)))).all()) if question_ids else []
-        lab_rows = list((await self.session.exec(select(LabEnvironmentSettings).where(LabEnvironmentSettings.section_id.in_(section_ids)))).all()) if section_ids else []
         sitting_rows = list((await self.session.exec(select(QuizSitting).where(QuizSitting.quiz_id.in_(quiz_ids)))).all()) if quiz_ids else []
         await self.session.execute(delete(Answer).where(Answer.question_id.in_(question_ids))) if question_ids else None
         await self.session.execute(delete(Question).where(Question.id.in_(question_ids))) if question_ids else None
         await self.session.execute(delete(QuizSitting).where(QuizSitting.quiz_id.in_(quiz_ids))) if quiz_ids else None
         await self.session.execute(delete(Quiz).where(Quiz.id.in_(quiz_ids))) if quiz_ids else None
-        await self.session.execute(delete(LabEnvironmentSettings).where(LabEnvironmentSettings.section_id.in_(section_ids))) if section_ids else None
+        await self.session.execute(delete(CourseLabAccess).where(CourseLabAccess.course_id == course_id))
         await self.session.execute(delete(SectionRow).where(SectionRow.id.in_(section_ids))) if section_ids else None
         await self.session.execute(delete(ModuleRow).where(ModuleRow.id.in_(module_ids))) if module_ids else None
         await self.slugs.release_ids(
             [course_id, *module_ids, *section_ids, *quiz_ids, *question_ids,
-             *[row.id for row in answer_rows], *[row.id for row in lab_rows], *[row.id for row in sitting_rows]]
+             *[row.id for row in answer_rows], *[row.id for row in sitting_rows]]
         )
         result = await self.session.execute(delete(CourseRow).where(CourseRow.id == course_id))
         await self.session.flush()

@@ -1,20 +1,14 @@
 from app.domain.entities.answer import Answer
-from app.domain.entities.lab_environment import LabEnvironmentSettings
 from app.domain.entities.question import Question
 from app.domain.entities.quiz import Quiz
 from app.domain.entities.quiz_sitting import QuizSitting
-from app.domain.value_objects.content import AccessMethod, ContentStatus, QuestionType, QuizAttemptState, Slug
+from app.domain.value_objects.content import ContentStatus, QuestionType, QuizAttemptState, Slug
 from app.domain.value_objects.quiz_assessment import AnswerPolicy, QuestionCode
 from app.infrastructure.persistence.mappers.content_mapper import utc
 from app.infrastructure.persistence.models.answer import Answer as AnswerRow
-from app.infrastructure.persistence.models.lab_environment_settings import LabEnvironmentSettings as LabRow
 from app.infrastructure.persistence.models.question import Question as QuestionRow
 from app.infrastructure.persistence.models.quiz import Quiz as QuizRow
 from app.infrastructure.persistence.models.quiz_sitting import QuizSitting as SittingRow
-
-
-def to_lab(row: LabRow) -> LabEnvironmentSettings:
-    return LabEnvironmentSettings(id=row.id, slug=Slug(row.slug), status=ContentStatus(row.status), created_at=utc(row.created_at), updated_at=utc(row.updated_at), section_id=row.section_id, provider=row.provider, region=row.region, image=row.image, cpu=row.cpu, memory_mb=row.memory_mb, storage_gb=row.storage_gb, access_method=AccessMethod(row.access_method), username=row.username, password_secret_ref=row.password_secret_ref, public_key=row.public_key, private_key_secret_ref=row.private_key_secret_ref, network_policy=row.network_policy, timeout_seconds=row.timeout_seconds, cleanup_policy=row.cleanup_policy)
 
 
 def to_quiz(row: QuizRow) -> Quiz:

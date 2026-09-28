@@ -1,24 +1,31 @@
 from sqlmodel import select
 
-from app.domain.entities.course import Course
-from app.domain.entities.lab_environment import LabEnvironmentSettings
-from app.domain.entities.module import Module
-from app.domain.entities.section import Section
-from app.domain.value_objects.content import AccessMethod, SectionContentType
-from app.infrastructure.persistence.models.lab_environment_settings import LabEnvironmentSettings as LabRow
-from app.infrastructure.persistence.unit_of_work import SqlModelUnitOfWork
+from app.domain.entities.course_lab_access import CourseLabAccess
+from app.infrastructure.persistence.models.course import Course
+from app.infrastructure.persistence.models.course_lab_access import CourseLabAccess as AccessRow
+from app.infrastructure.persistence.models.remote_server import RemoteServer
+from app.presentation.schemas.lab_access import CourseLabAccessRead
 
 
-async def test_raw_secret_is_not_persisted(session):
-    course = Course(slug="secret-course", title="Secrets")
-    module = Module(slug="secret-module", course_id=course.id, title="Module")
-    section = Section(slug="secret-lab", module_id=module.id, title="Lab", content_type=SectionContentType.LAB_TASK)
-    async with SqlModelUnitOfWork(session=session) as uow:
-        await uow.courses.create(course)
-        await uow.modules.create(module)
-        await uow.sections.create(section)
-        await uow.labs.create(LabEnvironmentSettings(slug="secret-settings", section_id=section.id, provider="local", image="ubuntu", username="student", access_method=AccessMethod.PASSWORD, password_secret_ref="secret://password"))
-        await uow.commit()
-    row = (await session.exec(select(LabRow))).first()
-    assert row.password_secret_ref == "secret://password"
-    assert "real-password" not in repr(row)
+async def test_lab_access_row_and_response_carry_no_secrets(session):
+    course_row = Course(slug="secret-course", title="Secrets", sequence=0)
+    server = RemoteServer(name="secret-box", host="10.9.9.9", username="student")
+    session.add(course_row)
+    session.add(server)
+    await session.flush()
+    access = CourseLabAccess(user_id="learner-1", course_id=course_row.id, server_id=server.id)
+    session.add(
+        AccessRow(
+            id=access.id, user_id=access.user_id, course_id=access.course_id, server_id=access.server_id,
+            state=access.state, created_at=access.created_at, updated_at=access.updated_at,
+        )
+    )
+    await session.flush()
+    row = (await session.exec(select(AccessRow))).first()
+    assert "hunter2-secret" not in repr(row)
+    assert not hasattr(row, "password_secret_ref") and not hasattr(row, "private_key_secret_ref")
+
+    payload = CourseLabAccessRead.model_validate(access, from_attributes=True).model_dump_json()
+    for token in ("hunter2-secret", "password", "private", "credential", "secret_ref"):
+        assert token not in payload.lower()
+    assert str(server.id) in payload

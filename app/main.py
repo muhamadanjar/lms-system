@@ -18,6 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
 from fastapi.exceptions import RequestValidationError
 from app.presentation.routers.courses import router as courses_router
+from app.presentation.routers.course_labs import router as course_labs_router
 from app.presentation.routers.modules import router as modules_router
 from app.presentation.routers.sections import router as sections_router
 from app.presentation.routers.servers import router as servers_router
@@ -55,6 +56,7 @@ app.add_middleware(
 )
 app.include_router(health_router)
 app.include_router(courses_router)
+app.include_router(course_labs_router)
 app.include_router(modules_router)
 app.include_router(sections_router)
 app.include_router(servers_router)

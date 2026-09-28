@@ -25,6 +25,8 @@ async def handle_domain_error(request: Request, exc: DomainError) -> JSONRespons
     if isinstance(exc, AuthorizationError):
         return _error(request, "FORBIDDEN", str(exc), 403)
     if isinstance(exc, ConflictError):
+        if str(exc) == "CAPACITY_EXHAUSTED":
+            return _error(request, "CAPACITY_EXHAUSTED", "No free lab server available", 409)
         if str(exc) == "EXAM_ATTEMPT_LIMIT_REACHED":
             return _error(request, "EXAM_ATTEMPT_LIMIT_REACHED", str(exc), 409)
         if "question_code" in str(exc):

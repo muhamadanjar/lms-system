@@ -5,6 +5,7 @@ class UnitOfWorkPort(ABC):
     courses: object
     modules: object
     sections: object
+    lab_access: object
     slugs: object
     servers: object
     quizzes: object
