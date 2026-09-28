@@ -6,7 +6,7 @@ from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, Uui
 from sqlmodel import Field
 
 from app.domain.value_objects.content import QuizAttemptState
-from app.infrastructure.persistence.models.base import ContentTable, enum_column
+from app.infrastructure.persistence.models.base import ContentTable
 
 
 class QuizSitting(ContentTable, table=True):

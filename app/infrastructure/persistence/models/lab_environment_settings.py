@@ -5,7 +5,7 @@ from sqlalchemy import Column, ForeignKey, Integer, String, Text, UniqueConstrai
 from sqlmodel import Field
 
 from app.domain.value_objects.content import AccessMethod
-from app.infrastructure.persistence.models.base import ContentTable, enum_column
+from app.infrastructure.persistence.models.base import ContentTable
 
 
 class LabEnvironmentSettings(ContentTable, table=True):

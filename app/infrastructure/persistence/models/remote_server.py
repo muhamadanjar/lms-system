@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import Text
+from sqlalchemy import Column, String, Text
 from sqlmodel import Field, SQLModel
 
 from app.domain.value_objects.content import AccessMethod
@@ -17,7 +17,10 @@ class RemoteServer(SQLModel, table=True):
     host: str = Field(max_length=255)
     port: int = Field(default=22)
     username: str = Field(max_length=255)
-    access_method: AccessMethod = Field(default=AccessMethod.PASSWORD)
+    access_method: AccessMethod = Field(
+        default=AccessMethod.PASSWORD,
+        sa_column=Column(String(11), nullable=False),
+    )
     credential_ciphertext: Optional[str] = Field(default=None, sa_type=Text)
     credential_nonce: Optional[str] = Field(default=None, sa_type=Text)
     credential_key_version: Optional[int] = None

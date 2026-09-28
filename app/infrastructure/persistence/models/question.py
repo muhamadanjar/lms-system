@@ -5,7 +5,7 @@ from sqlalchemy import Column, ForeignKey, Integer, Numeric, String, UniqueConst
 from sqlmodel import Field
 
 from app.domain.value_objects.content import QuestionType
-from app.infrastructure.persistence.models.base import ContentTable, enum_column
+from app.infrastructure.persistence.models.base import ContentTable
 
 
 class Question(ContentTable, table=True):
