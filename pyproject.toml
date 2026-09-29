@@ -1,6 +1,6 @@
 [project]
 name = "lms-system"
-version = "0.0.0"
+version = "1.0.0"
 description = "LMS System backend for learning content and assessment"
 readme = "AGENTS.md"
 requires-python = ">=3.12"
