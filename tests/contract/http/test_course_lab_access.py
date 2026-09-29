@@ -58,12 +58,18 @@ async def _seed(client: httpx.AsyncClient, slug: str = COURSE, sections: int = 2
         assert response.status_code == 201, response.text
 
 
+async def _enroll_course(client: httpx.AsyncClient, slug: str, user_id: str) -> None:
+    response = await client.post(f"/api/courses/{slug}/enrollments", json={"user_id": user_id})
+    assert response.status_code == 201, response.text
+
+
 async def test_enroll_one_access_shared_across_sections(session):
     admin = _user("admin-1", "servers.create", roles=("admin",))
     client = await _client(session, admin)
     try:
         async with client:
             await _seed(client)
+            await _enroll_course(client, COURSE, "peserta-1")
             response = await client.post(f"/api/courses/{COURSE}/lab/enroll", json={"user_id": "peserta-1"})
             assert response.status_code == 201, response.text
             first = response.json()["data"]
@@ -90,6 +96,8 @@ async def test_courses_are_isolated(session):
         async with client:
             await _seed(client, slug=COURSE, servers=1)
             await _seed(client, slug=COURSE_B, servers=1)
+            await _enroll_course(client, COURSE, "peserta-1")
+            await _enroll_course(client, COURSE_B, "peserta-1")
             r1 = await client.post(f"/api/courses/{COURSE}/lab/enroll", json={"user_id": "peserta-1"})
             r2 = await client.post(f"/api/courses/{COURSE_B}/lab/enroll", json={"user_id": "peserta-1"})
             assert r1.status_code == 201 and r2.status_code == 201
@@ -104,6 +112,8 @@ async def test_capacity_failure_and_release_reuse(session):
     try:
         async with client:
             await _seed(client, sections=1, servers=1)
+            await _enroll_course(client, COURSE, "u1")
+            await _enroll_course(client, COURSE, "u2")
             assert (await client.post(f"/api/courses/{COURSE}/lab/enroll", json={"user_id": "u1"})).status_code == 201
             full = await client.post(f"/api/courses/{COURSE}/lab/enroll", json={"user_id": "u2"})
             assert full.status_code == 409
@@ -120,6 +130,7 @@ async def test_learner_response_has_no_secrets(session):
     try:
         async with client:
             await _seed(client, sections=1, servers=1)
+            await _enroll_course(client, COURSE, "u1")
             response = await client.post(f"/api/courses/{COURSE}/lab/enroll", json={"user_id": "u1"})
             body = response.text.lower()
             assert "secret" not in body

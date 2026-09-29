@@ -2,7 +2,7 @@ from collections.abc import Callable
 from uuid import UUID
 
 from app.domain.entities.course_lab_access import CourseLabAccess
-from app.domain.exceptions import ConflictError, NotFoundError
+from app.domain.exceptions import AuthorizationError, ConflictError, NotFoundError
 
 
 class LabEnrollmentUseCases:
@@ -20,6 +20,10 @@ class LabEnrollmentUseCases:
     async def enroll(self, course_slug: str, user_id: str) -> CourseLabAccess:
         async with self.uow_factory() as uow:
             course_id = await self._get_course_id(uow, course_slug)
+            enrollment = await uow.enrollments.get_live(user_id, course_id)
+            if enrollment is None:
+                await uow.rollback()
+                raise AuthorizationError("ENROLLMENT_REQUIRED")
             existing = await uow.lab_access.get_live(user_id, course_id)
             if existing is not None:
                 await uow.rollback()

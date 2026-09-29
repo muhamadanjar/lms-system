@@ -52,7 +52,7 @@ class ServerConsoleUseCase:
             envelope = await uow.servers.get_credential_envelope(server_id)
             if envelope is None:
                 raise ConsoleNotOpenable("server_error")
-            secret = self.cipher.decrypt(envelope, server_id)
+            credential = self.cipher.decrypt(envelope, server_id, server.access_method)
 
         slot = self.registry.try_acquire(server_id, session_id, session=None)
         if not slot:
@@ -66,9 +66,9 @@ class ServerConsoleUseCase:
                 host=server.host,
                 port=server.port,
                 username=server.username,
-                method=server.access_method,
-                secret=secret,
-                passphrase=None,
+                method=credential.method,
+                secret=credential.value,
+                passphrase=credential.passphrase,
                 expected_host_key=server.host_key,
                 term=term,
             )

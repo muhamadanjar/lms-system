@@ -111,3 +111,18 @@
 Inventory CRUD works over REST with ciphertext-only persistence; an interactive console
 opens over WebSocket against a disposable SSH server; conflict/takeover closes the old
 console; no secret appears in responses, logs, or test output.
+
+## Passphrase Compatibility Amendment (2026-09-29)
+
+- [x] B001 Add a versioned server credential payload codec that serializes the value and
+      optional passphrase before encryption and reads legacy unmarked credential values.
+- [x] B002 Use the codec in the repository while continuing to persist only the existing
+      AES-GCM ciphertext, nonce, and key version fields.
+- [x] B003 Decode the decrypted payload in the console use case and pass its passphrase
+      to the SSH bridge.
+- [x] B004 Add unit/application/persistence regressions for encrypted passphrase handoff,
+      legacy credentials, replacement, and non-disclosure.
+- [x] B005 Refresh this spec, Dashboard integration documentation, and progress notes.
+- [x] B006 Separate Dashboard `auth_error`, console `permission_error`, and SSH
+      `ssh_auth_error` reason codes; update the frame contract, UI messages, and
+      regression coverage.

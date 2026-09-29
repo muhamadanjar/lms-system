@@ -6,7 +6,19 @@ import pytest
 
 from app.application.use_cases.lab_enrollment import LabEnrollmentUseCases
 from app.domain.entities.course_lab_access import CourseLabAccess
-from app.domain.exceptions import ConflictError, NotFoundError
+from app.domain.exceptions import AuthorizationError, ConflictError, NotFoundError
+
+
+class FakeEnrollments:
+    """Semua user dianggap ENROLLED kecuali yang didaftarkan di denied."""
+
+    def __init__(self):
+        self.denied: set[tuple[str, str]] = set()
+
+    async def get_live(self, user_id, course_id):
+        if (user_id, str(course_id)) in self.denied:
+            return None
+        return object()
 
 
 class FakeCourse:
@@ -62,9 +74,10 @@ class FakeLabAccessRepo:
 
 
 class FakeUoW:
-    def __init__(self, courses, repo):
+    def __init__(self, courses, repo, enrollments=None):
         self.courses = FakeCourses(courses)
         self.lab_access = repo
+        self.enrollments = enrollments or FakeEnrollments()
         self.commits = 0
 
     async def __aenter__(self):
@@ -135,3 +148,14 @@ async def test_unknown_course_raises_not_found():
     uc, _ = make_uc()
     with pytest.raises(NotFoundError):
         await uc.enroll("missing", "u1")
+
+
+async def test_lab_enroll_denied_without_enrollment():
+    courses = [FakeCourse("c1")]
+    repo = FakeLabAccessRepo([uuid4()])
+    denied = FakeEnrollments()
+    denied.denied.add(("luar", str(courses[0].id)))
+    uc = LabEnrollmentUseCases(lambda: FakeUoW(courses, repo, denied))
+    with pytest.raises(AuthorizationError):
+        await uc.enroll("c1", "luar")
+    assert repo.rows == {}

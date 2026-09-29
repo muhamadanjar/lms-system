@@ -14,13 +14,11 @@ registry; Alembic migration `0003_remote_server`.
 | `host` | str(255) | no | IPv4/IPv6 or hostname |
 | `port` | int | no | `1..65535`, default `22` |
 | `username` | str(255) | no | SSH login user |
-| `access_method` | enum | no | `PASSWORD` \| `PUBLIC_KEY` |
-| `credential_ciphertext` | bytes/largebytes | no | AES-GCM ciphertext blob |
-| `credential_nonce` | bytes(12) | no | AES-GCM nonce |
-| `credential_key_version` | int | no | Key version in `SSH_CREDENTIAL_ENC_KEY` rotation |
-| `credential_kdf_salt` | bytes(16) | nullable | Salt when optional passphrase protects the key material |
+| `access_method` | varchar(11) | no | `PASSWORD` \| `PUBLIC_KEY` |
+| `credential_ciphertext` | text | nullable | Base64 AES-GCM ciphertext blob |
+| `credential_nonce` | text | nullable | Base64 AES-GCM nonce |
+| `credential_key_version` | int | nullable | Key version in `SSH_CREDENTIAL_ENC_KEY` rotation |
 | `host_key` | text | nullable | OpenSSH host key line captured at first connect (TOFU); first connect writes it, mismatch rejects |
-| `passphrase_protected` | bool | no | Whether credential is passphrase-protected |
 | `created_at` | timestamptz | no | |
 | `updated_at` | timestamptz | no | |
 | `deleted_at` | timestamptz | nullable | Soft delete; consoles refused for deleted servers |
@@ -37,6 +35,13 @@ registry; Alembic migration `0003_remote_server`.
   for the lifetime of a decryption call and is wiped from local variables after connect.
 
 ## Credential envelope (stored bytes)
+
+New credentials use a versioned plaintext representation inside the existing AES-GCM
+envelope: a fixed `lms-remote-credential:v1:` marker followed by JSON containing the
+credential value and optional passphrase. The wrapper is encrypted together with the
+private key; no database migration or additional plaintext field is required. Existing
+rows whose decrypted content lacks the marker remain supported as legacy values with
+no passphrase.
 
 ```
 credential_ciphertext = AESGCM(key).encrypt(nonce, plaintext, associated_data)

@@ -123,7 +123,7 @@ class SqlModelRemoteServerRepository(RemoteServerRepository):
         return True
 
     def _apply_credential(self, row: RemoteServerRow, server: RemoteServer) -> None:
-        envelope = self._resolved_cipher.encrypt(server.credential.value, server.id)
+        envelope = self._resolved_cipher.encrypt(server.credential, server.id)
         row.credential_ciphertext = b64encode(envelope.ciphertext).decode("ascii")
         row.credential_nonce = b64encode(envelope.nonce).decode("ascii")
         row.credential_key_version = envelope.key_version

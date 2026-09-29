@@ -87,7 +87,7 @@ class InMemoryServers:
         if self._by_name.get(server.name) is not None:
             raise ConflictError(f"server '{server.name}' already exists")
         if server.credential is not None and self._cipher is not None:
-            self._envelopes[server.id] = self._cipher.encrypt(server.credential.value, server.id)
+            self._envelopes[server.id] = self._cipher.encrypt(server.credential, server.id)
         out = _without_credential(server)
         self._by_id[server.id] = out
         self._by_name[server.name] = out
@@ -117,7 +117,7 @@ class InMemoryServers:
             self._envelopes.pop(server.id, None)
             server.credential_available = False
         elif server.credential is not None and self._cipher is not None:
-            self._envelopes[server.id] = self._cipher.encrypt(server.credential.value, server.id)
+            self._envelopes[server.id] = self._cipher.encrypt(server.credential, server.id)
             server.credential_available = True
         out = _without_credential(server)
         self._by_id[server.id] = out

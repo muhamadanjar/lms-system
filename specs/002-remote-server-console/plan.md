@@ -60,3 +60,22 @@ are out of scope for this iteration.
 - [x] No secret material leaves the service boundary unencrypted.
 - [x] Domain rules stay in `app/domain`; infra adapters implement ports.
 - [ ] All four user stories have acceptance-scenario coverage in the plan phases.
+
+## Credential Passphrase Compatibility Amendment (2026-09-29)
+
+The credential input already accepts an optional private-key passphrase, but current
+persistence encrypts only the private-key value and the console use case supplies
+`None` to the SSH bridge. Extend the encrypted plaintext format to carry both value and
+passphrase in one AES-GCM envelope. Prefix the new serialized format with a versioned
+marker; decrypt legacy unmarked ciphertext as the existing raw password/private-key
+value with no passphrase. Keep both fields encrypted at rest and absent from API
+responses and logs. Update persistence/application/SSH tests for create, replace, clear,
+legacy reads, encrypted-key passphrase handoff, and secret non-disclosure.
+
+## Authentication Error Classification Amendment (2026-09-29)
+
+Do not reuse `auth_error` for Dashboard WebSocket authentication, missing
+`servers.view`, and rejected SSH credentials. Keep `auth_error` for the dashboard token,
+emit `permission_error` for the missing permission, and emit `ssh_auth_error` when the
+target SSH server rejects the username/key. These reason codes contain no credential
+material and let the console present actionable messages.

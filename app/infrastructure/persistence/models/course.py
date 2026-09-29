@@ -9,4 +9,4 @@ class Course(ContentTable, table=True):
     __tablename__ = "courses"
     title: str = Field(max_length=255)
     description: Optional[str] = Field(default=None, sa_type=Text)
-    sequence: int = Field(default=0)
+    sequence: int = Field(default=0, nullable=True)

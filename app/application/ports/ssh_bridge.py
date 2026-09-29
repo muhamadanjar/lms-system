@@ -15,7 +15,7 @@ class SshConsoleError(Exception):
 
 
 class SshAuthFailed(SshConsoleError):
-    reason = "auth_error"
+    reason = "ssh_auth_error"
 
 
 class SshNetworkError(SshConsoleError):

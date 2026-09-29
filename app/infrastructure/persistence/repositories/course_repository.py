@@ -14,6 +14,7 @@ from app.infrastructure.persistence.models.answer import Answer
 from app.infrastructure.persistence.models.content_slug_registry import ContentSlugRegistry
 from app.infrastructure.persistence.models.course import Course as CourseRow
 from app.infrastructure.persistence.models.course_lab_access import CourseLabAccess
+from app.infrastructure.persistence.models.enrollment import Enrollment
 from app.infrastructure.persistence.models.module import Module as ModuleRow
 from app.infrastructure.persistence.models.question import Question
 from app.infrastructure.persistence.models.quiz import Quiz
@@ -105,6 +106,7 @@ class SqlModelCourseRepository:
         await self.session.execute(delete(QuizSitting).where(QuizSitting.quiz_id.in_(quiz_ids))) if quiz_ids else None
         await self.session.execute(delete(Quiz).where(Quiz.id.in_(quiz_ids))) if quiz_ids else None
         await self.session.execute(delete(CourseLabAccess).where(CourseLabAccess.course_id == course_id))
+        await self.session.execute(delete(Enrollment).where(Enrollment.course_id == course_id))
         await self.session.execute(delete(SectionRow).where(SectionRow.id.in_(section_ids))) if section_ids else None
         await self.session.execute(delete(ModuleRow).where(ModuleRow.id.in_(module_ids))) if module_ids else None
         await self.slugs.release_ids(

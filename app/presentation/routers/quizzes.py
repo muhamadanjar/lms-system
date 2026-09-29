@@ -7,7 +7,7 @@ from app.application.use_cases.quiz_authoring import QuizAuthoringUseCases
 from app.application.use_cases.quiz_sittings import QuizSittingUseCases
 from app.infrastructure.database.dependencies import get_uow
 from app.infrastructure.persistence.unit_of_work import SqlModelUnitOfWork
-from app.presentation.dependencies.auth import get_current_user
+from app.presentation.dependencies.auth import get_current_user, require_content_editor
 from app.presentation.schemas.content import ApiResponse
 from app.presentation.schemas.quiz_attempt_policy import QuizConfigurationRequest
 from app.presentation.schemas.quiz_questions import QuizQuestionCreate, QuizQuestionRead, QuizQuestionUpdate
@@ -27,19 +27,19 @@ _nested_prefix = "/api/courses/{course_slug}/modules/{module_slug}/sections/{sec
 
 
 @router.patch(_nested_prefix, response_model=ApiResponse[dict[str, object]])
-async def configure_quiz(course_slug: str, module_slug: str, section_slug: str, payload: QuizConfigurationRequest, user: CurrentUser = Depends(get_current_user), uow: SqlModelUnitOfWork = Depends(get_uow)):
+async def configure_quiz(course_slug: str, module_slug: str, section_slug: str, payload: QuizConfigurationRequest, user: CurrentUser = Depends(require_content_editor), uow: SqlModelUnitOfWork = Depends(get_uow)):
     quiz = await QuizAuthoringUseCases(uow).configure(user, course_slug, module_slug, section_slug, is_exam=payload.is_exam, max_attempts=payload.max_attempts, answer_policy=payload.answer_policy)
     return ApiResponse(data={"id": str(quiz.id), "is_exam": quiz.is_exam, "max_attempts": quiz.max_attempts, "answer_policy": str(quiz.answer_policy)}, meta={})
 
 
 @router.post(_nested_prefix + "/questions", response_model=ApiResponse[QuizQuestionRead], status_code=status.HTTP_201_CREATED)
-async def create_quiz_question(course_slug: str, module_slug: str, section_slug: str, payload: QuizQuestionCreate, user: CurrentUser = Depends(get_current_user), uow: SqlModelUnitOfWork = Depends(get_uow)):
+async def create_quiz_question(course_slug: str, module_slug: str, section_slug: str, payload: QuizQuestionCreate, user: CurrentUser = Depends(require_content_editor), uow: SqlModelUnitOfWork = Depends(get_uow)):
     question = await QuizAuthoringUseCases(uow).create_question(user, course_slug, module_slug, section_slug, prompt=payload.prompt, question_code=payload.question_code)
     return ApiResponse(data=QuizQuestionRead(id=str(question.id), slug=str(question.slug), prompt=question.prompt, question_code=str(question.question_code)), meta={})
 
 
 @router.patch(_nested_prefix + "/questions/{question_slug}", response_model=ApiResponse[QuizQuestionRead])
-async def update_quiz_question(course_slug: str, module_slug: str, section_slug: str, question_slug: str, payload: QuizQuestionUpdate, user: CurrentUser = Depends(get_current_user), uow: SqlModelUnitOfWork = Depends(get_uow)):
+async def update_quiz_question(course_slug: str, module_slug: str, section_slug: str, question_slug: str, payload: QuizQuestionUpdate, user: CurrentUser = Depends(require_content_editor), uow: SqlModelUnitOfWork = Depends(get_uow)):
     authoring = QuizAuthoringUseCases(uow)
     async with uow:
         quiz = await authoring.quiz_for_path(course_slug, module_slug, section_slug)

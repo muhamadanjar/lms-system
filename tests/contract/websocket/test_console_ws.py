@@ -145,7 +145,7 @@ def test_console_denied_when_lacking_permission(monkeypatch):
         with pytest.raises(WebSocketDisconnect) as exc_info:
             with client.websocket_connect(_ws_path(server_id), subprotocols=["bearer.token"]) as ws:
                 frame = ws.receive_json()
-                assert frame == {"type": "closed", "reason": "auth_error"}
+                assert frame == {"type": "closed", "reason": "permission_error"}
                 ws.receive_json()
         assert exc_info.value.code == 4403
 

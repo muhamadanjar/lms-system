@@ -6,6 +6,7 @@ from app.infrastructure.persistence.models.answer import Answer
 from app.infrastructure.persistence.models.content_slug_registry import ContentSlugRegistry
 from app.infrastructure.persistence.models.course import Course
 from app.infrastructure.persistence.models.course_lab_access import CourseLabAccess
+from app.infrastructure.persistence.models.enrollment import Enrollment
 from app.infrastructure.persistence.models.module import Module
 from app.infrastructure.persistence.models.question import Question
 from app.infrastructure.persistence.models.quiz import Quiz
@@ -24,6 +25,7 @@ __all__ = [
     "ContentSlugRegistry",
     "Course",
     "CourseLabAccess",
+    "Enrollment",
     "Module",
     "Question",
     "QuestionCodeSequence",

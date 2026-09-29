@@ -18,6 +18,8 @@ def test_migration_chain_is_reversible_and_has_head():
         "0006_store_enums_as_strings",
         "0007_lab_assignments",
         "0008_course_lab_access",
+        "0009_course_enrollment",
+        "0010_add_sequence_course",
     }
-    assert scripts.get_current_head() == "0008_course_lab_access"
+    assert scripts.get_current_head() == "0010_add_sequence_course"
     assert all(re.fullmatch(r"\d{4}_[a-z0-9_]+", revision.revision) for revision in revisions)

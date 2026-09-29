@@ -4,6 +4,7 @@ import pytest
 from uuid import uuid4
 
 from app.application.ports.ssh_bridge import TermSize
+from app.application.ports.ssh_bridge import SshAuthFailed
 from app.application.use_cases.server_console import (
     ConsoleAccepted,
     ConsoleConflict,
@@ -84,7 +85,7 @@ class TestServerInventory:
         assert created.credential is None
         assert created.credential_available is True
         envelope = await store.get_credential_envelope(created.id)
-        assert cipher.decrypt(envelope, created.id) == "hunter2"
+        assert cipher.decrypt(envelope, created.id, AccessMethod.PASSWORD).value == "hunter2"
         assert uow.commits >= 1
 
     async def test_duplicate_name_conflicts(self):
@@ -116,7 +117,7 @@ class TestServerInventory:
         assert updated.username == "root"
         assert updated.port == 2222
         assert updated.credential_available is True
-        assert cipher.decrypt(await store.get_credential_envelope(created.id), created.id) == "pw"
+        assert cipher.decrypt(await store.get_credential_envelope(created.id), created.id, AccessMethod.PASSWORD).value == "pw"
 
     async def test_update_clear_credential(self):
         cipher = make_cipher()
@@ -171,6 +172,43 @@ class TestServerInventory:
 
 @pytest.mark.unit
 class TestServerConsole:
+    async def test_ssh_authentication_failure_has_specific_reason(self):
+        cipher = make_cipher()
+        store = InMemoryServers(cipher)
+        bridge = FakeBridge()
+        bridge.fail = SshAuthFailed("SSH authentication failed")
+        uc, _ = console_uc(store, cipher, bridge=bridge)
+        srv = await uc_inventory_create(store, cipher)
+
+        with pytest.raises(ConsoleNotOpenable) as exc:
+            await uc.open(srv.id, TermSize(80, 24))
+
+        assert exc.value.reason == "ssh_auth_error"
+
+    async def test_open_passes_decrypted_key_passphrase_to_ssh_bridge(self):
+        cipher = make_cipher()
+        store = InMemoryServers(cipher)
+        bridge = FakeBridge()
+        inventory, _ = inventory_uc(store, cipher)
+        key = "-----BEGIN OPENSSH PRIVATE KEY-----\nZmFrZS1rZXk=\n-----END OPENSSH PRIVATE KEY-----"
+        saved = await inventory.create(
+            name="keybox",
+            host="10.0.0.11",
+            username="deploy",
+            access_method=AccessMethod.PUBLIC_KEY,
+            credential=ServerCredential(
+                method=AccessMethod.PUBLIC_KEY,
+                value=key,
+                passphrase="private-key-passphrase",
+            ),
+        )
+        uc, _ = console_uc(store, cipher, bridge=bridge)
+
+        await uc.open(saved.id, TermSize(80, 24))
+
+        assert bridge.calls[0]["secret"] == key
+        assert bridge.calls[0]["passphrase"] == "private-key-passphrase"
+
     async def test_open_missing_credential_not_openable(self):
         cipher = make_cipher()
         store = InMemoryServers(cipher)

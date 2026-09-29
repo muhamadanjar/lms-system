@@ -19,6 +19,7 @@ def make_server(
     mode: AccessMethod = AccessMethod.PASSWORD,
     credential: str | None = "hunter2",
     include_clear: bool = False,
+    passphrase: str | None = None,
 ) -> RemoteServer:
     server = RemoteServer(
         name=name,
@@ -26,7 +27,7 @@ def make_server(
         port=22,
         username="root",
         access_method=mode,
-        credential=ServerCredential(method=mode, value=credential) if credential is not None else None,
+        credential=ServerCredential(method=mode, value=credential, passphrase=passphrase) if credential is not None else None,
     )
     if include_clear:
         server._clear_credential = True  # type: ignore[attr-defined]
@@ -49,7 +50,9 @@ async def test_create_encrypts_credential_and_mapping_never_leaks(session):
     assert "hunter2" not in row.credential_ciphertext
 
     envelope = await repo.get_credential_envelope(created.id)
-    assert cipher.decrypt(envelope, created.id) == "hunter2"
+    decrypted = cipher.decrypt(envelope, created.id, AccessMethod.PASSWORD)
+    assert decrypted.value == "hunter2"
+    assert decrypted.passphrase is None
 
 
 async def test_get_credential_envelope_returns_none_for_clear_server(session):
@@ -74,7 +77,7 @@ async def test_reload_with_same_cipher_can_decrypt(session):
     assert loaded.credential is None
     assert loaded.credential_available is True
     envelope = await repo.get_credential_envelope(created.id)
-    assert cipher.decrypt(envelope, created.id) == "hunter2"
+    assert cipher.decrypt(envelope, created.id, AccessMethod.PASSWORD).value == "hunter2"
 
 
 async def test_update_without_credential_preserves_secret(session):
@@ -97,7 +100,7 @@ async def test_update_without_credential_preserves_secret(session):
 
     assert updated.host == "10.0.0.2"
     envelope = await repo.get_credential_envelope(created.id)
-    assert cipher.decrypt(envelope, created.id) == "hunter2"
+    assert cipher.decrypt(envelope, created.id, AccessMethod.PASSWORD).value == "hunter2"
 
 
 async def test_update_can_clear_or_replace_credential(session):
@@ -134,7 +137,7 @@ async def test_update_can_clear_or_replace_credential(session):
     await repo.update(replace)
     await session.commit()
     envelope = await repo.get_credential_envelope(created.id)
-    assert cipher.decrypt(envelope, created.id) == "new-secret"
+    assert cipher.decrypt(envelope, created.id, AccessMethod.PASSWORD).value == "new-secret"
 
 
 async def test_soft_delete_hides_from_list_and_is_idempotent(session):
@@ -180,14 +183,41 @@ async def test_update_missing_server_raises(session):
 async def test_public_key_credential_round_trip(session):
     cipher = AesGcmCredentialCipher(os.urandom(32))
     repo = SqlModelRemoteServerRepository(session, cipher)
-    pubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA"
+    pubkey = "-----BEGIN OPENSSH PRIVATE KEY-----\nZmFrZS1rZXk=\n-----END OPENSSH PRIVATE KEY-----"
     server = make_server(
         mode=AccessMethod.PUBLIC_KEY,
         credential=pubkey,
         name="keybox",
+        passphrase="private-key-passphrase",
     )
     created = await repo.create(server)
     await session.commit()
 
     envelope = await repo.get_credential_envelope(created.id)
-    assert cipher.decrypt(envelope, created.id) == pubkey
+    decrypted = cipher.decrypt(envelope, created.id, AccessMethod.PUBLIC_KEY)
+    assert decrypted.value == pubkey
+    assert decrypted.passphrase == "private-key-passphrase"
+    row = await session.get(RemoteServerRow, created.id)
+    assert row is not None
+    assert "private-key-passphrase" not in row.credential_ciphertext
+
+
+async def test_decrypt_legacy_unwrapped_credential(session):
+    from app.application.ports.credential_cipher import CredentialEnvelope
+
+    key = os.urandom(32)
+    cipher = AesGcmCredentialCipher(key)
+    repo = SqlModelRemoteServerRepository(session, cipher)
+    created = await repo.create(make_server())
+    await session.commit()
+
+    nonce = os.urandom(12)
+    ciphertext = cipher._cipher.encrypt(
+        nonce,
+        b"legacy-private-key",
+        cipher._aad(created.id, cipher.key_version),
+    )
+    legacy = CredentialEnvelope(ciphertext=ciphertext, nonce=nonce, key_version=cipher.key_version)
+    decrypted = cipher.decrypt(legacy, created.id, AccessMethod.PASSWORD)
+    assert decrypted.value == "legacy-private-key"
+    assert decrypted.passphrase is None

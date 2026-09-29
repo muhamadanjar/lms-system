@@ -36,7 +36,11 @@ All frames are JSON text. `data` payloads for `input`/`output` are UTF-8 strings
 | `ready` | `{}` | SSH channel + PTY established |
 | `output` | `{"data": "…"}` | PTY output chunk, streamed |
 | `conflict` | `{"active_since": "RFC3339"}` | another console active; client split, awaiting decision |
-| `closed` | `{"reason": "disconnected" \| "replaced" \| "server_deleted" \| "server_error" \| "auth_error" \| "network_error"}` | terminal state |
+| `closed` | `{"reason": "disconnected" \| "replaced" \| "server_deleted" \| "server_error" \| "auth_error" \| "permission_error" \| "ssh_auth_error" \| "network_error"}` | terminal state |
+
+`auth_error` identifies a rejected/expired Dashboard token, `permission_error` identifies
+missing `servers.view`, and `ssh_auth_error` identifies a username/private-key rejection
+by the target SSH server. These codes never include secret material.
 | `pong` | `{"id": 1}` | heartbeat reply |
 
 ### Client → server

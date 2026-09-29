@@ -8,6 +8,7 @@ from app.infrastructure.crypto.aesgcm import AesGcmCredentialCipher, encode_cred
 from app.infrastructure.persistence.repositories.content_slug_repository import SqlModelContentSlugRegistry
 from app.infrastructure.persistence.repositories.course_lab_access_repository import SqlModelCourseLabAccessRepository
 from app.infrastructure.persistence.repositories.course_repository import SqlModelCourseRepository
+from app.infrastructure.persistence.repositories.enrollment_repository import SqlModelEnrollmentRepository
 from app.infrastructure.persistence.repositories.module_repository import SqlModelModuleRepository
 from app.infrastructure.persistence.repositories.quiz_repository import SqlModelQuizRepository
 from app.infrastructure.persistence.repositories.quiz_sitting_repository import SqlModelQuizSittingRepository
@@ -38,6 +39,7 @@ class SqlModelUnitOfWork(UnitOfWorkPort):
         self.modules = SqlModelModuleRepository(self.session, self.slugs)
         self.sections = SqlModelSectionRepository(self.session, self.slugs)
         self.lab_access = SqlModelCourseLabAccessRepository(self.session)
+        self.enrollments = SqlModelEnrollmentRepository(self.session)
         self.quizzes = SqlModelQuizRepository(self.session, self.slugs)
         self.sittings = SqlModelQuizSittingRepository(self.session, self.slugs)
         self.servers = SqlModelRemoteServerRepository(self.session, default_credential_cipher)

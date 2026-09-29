@@ -23,6 +23,8 @@ async def handle_domain_error(request: Request, exc: DomainError) -> JSONRespons
     if isinstance(exc, NotFoundError):
         return _error(request, "RESOURCE_NOT_FOUND", str(exc), 404)
     if isinstance(exc, AuthorizationError):
+        if str(exc) == "ENROLLMENT_REQUIRED":
+            return _error(request, "ENROLLMENT_REQUIRED", "Enrollment in this course is required", 403)
         return _error(request, "FORBIDDEN", str(exc), 403)
     if isinstance(exc, ConflictError):
         if str(exc) == "CAPACITY_EXHAUSTED":

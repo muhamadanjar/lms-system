@@ -1,5 +1,7 @@
 import asyncio
 import json
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -23,6 +25,17 @@ ws_router = APIRouter()
 _registry: InMemoryConsoleRegistry | None = None
 
 
+@asynccontextmanager
+async def _database_uow() -> AsyncIterator[SqlModelUnitOfWork]:
+    session = await database_manager.create_async_session("default")
+    uow = SqlModelUnitOfWork(session=session)
+    try:
+        async with uow:
+            yield uow
+    finally:
+        await session.close()
+
+
 def get_console_registry() -> InMemoryConsoleRegistry:
     global _registry
     if _registry is None:
@@ -39,11 +52,7 @@ async def user_may_open_console(user, server_id: UUID) -> bool:
     try:
         from app.application.use_cases.lab_enrollment import LabEnrollmentUseCases
 
-        async def uow_factory():
-            session = await database_manager.create_async_session("default")
-            return SqlModelUnitOfWork(session=session)
-
-        return await LabEnrollmentUseCases(uow_factory).user_has_course_server(user.id, server_id)
+        return await LabEnrollmentUseCases(_database_uow).user_has_course_server(user.id, server_id)
     except Exception:
         return False
 
@@ -73,11 +82,7 @@ def build_console_use_case() -> ServerConsoleUseCase:
     )
     registry = get_console_registry()
 
-    async def uow_factory() -> SqlModelUnitOfWork:
-        session = await database_manager.create_async_session("default")
-        return SqlModelUnitOfWork(session=session)
-
-    return create_console_use_case(uow_factory, cipher, bridge, registry)
+    return create_console_use_case(_database_uow, cipher, bridge, registry)
 
 
 def _send(ws: WebSocket, payload: dict, lock: asyncio.Lock) -> "asyncio.Task":
@@ -147,14 +152,16 @@ async def console_websocket(ws: WebSocket, server_id: UUID):
     echo: str | None = None
     try:
         user, echo = await authenticate_websocket(ws)
-    except WebSocketAuthError:
+    except WebSocketAuthError as e:
+
+        print(e)
         await ws.accept()
         await ws.send_text(json.dumps(_frame_closed("auth_error")))
         await ws.close(code=4401)
         return
     if not await user_may_open_console(user, server_id):
         await ws.accept()
-        await ws.send_text(json.dumps(_frame_closed("auth_error")))
+        await ws.send_text(json.dumps(_frame_closed("permission_error")))
         await ws.close(code=4403)
         return
     await ws.accept(subprotocol=echo)
@@ -243,7 +250,8 @@ async def console_websocket(ws: WebSocket, server_id: UUID):
     except ConsoleNotOpenable as exc:
         task = _send(ws, _frame_closed(exc.reason), send_lock)
         await task
-    except Exception:
+    except Exception as e:
+        print(e)
         task = _send(ws, _frame_closed("server_error"), send_lock)
         await task
     finally:

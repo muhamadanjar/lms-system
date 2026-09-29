@@ -40,6 +40,13 @@ Related dashboard docs: `services/dashboard/docs/plans/servers-vps-terminal.md`,
   (`/api/v1/servers`). Response tidak pernah berisi ciphertext/plaintext kredensial;
   diganti `has_credential` boolean.
 
+### Session 2026-09-29
+
+- Clarification: passphrase untuk private key harus dienkripsi di dalam payload
+  credential AES-GCM yang sama. Credential lama yang ciphertext plaintext-nya berupa
+  password/private key tanpa wrapper tetap dibaca dengan `passphrase=None`; API
+  response dan log tetap tidak mengungkapkan keduanya.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Manage Remote Server Inventory (Priority: P1)
@@ -88,6 +95,8 @@ resize the terminal, then close the socket and verify the SSH channel closes.
    **Then** the remote PTY window size updates and rendering adapts.
 4. **Given** a WebSocket disconnect (client or network), **When** it detects the drop,
    **Then** the SSH channel and PTY are closed and the session registry entry is removed.
+5. **Given** an encrypted private key and its passphrase, **When** the console connects,
+   **Then** LMS decrypts both only in process and supplies the passphrase to asyncssh.
 
 ---
 
