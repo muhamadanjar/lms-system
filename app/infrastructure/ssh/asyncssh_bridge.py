@@ -39,7 +39,9 @@ class _HostKeyClient(asyncssh.SSHClient):
         return True
 
     def validate_host_ca_key(self, host: str, addr: str, port: int, key: asyncssh.SSHKey) -> bool:
-        return True
+        # Host certificates are unsupported until their CA can be explicitly trusted.
+        # Accepting every CA would bypass the per-server host-key pin above.
+        return False
 
 
 class _TerminalSession:
