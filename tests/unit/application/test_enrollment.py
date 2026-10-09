@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 from uuid import uuid4
+from types import SimpleNamespace
 
 import pytest
 
@@ -22,6 +23,9 @@ class FakeCourses:
 
     async def get_by_slug(self, slug):
         return self.by_slug.get(slug)
+
+    async def get_hierarchy(self, course_id, include_archived=False):
+        return SimpleNamespace(modules=[], sections_by_module={})
 
 
 class FakeEnrollmentRepo:

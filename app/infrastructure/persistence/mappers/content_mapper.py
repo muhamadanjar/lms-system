@@ -22,6 +22,8 @@ def to_course(row: CourseRow) -> Course:
         updated_at=utc(row.updated_at),
         title=row.title,
         description=row.description,
+        progression_mode=row.progression_mode,
+        completion_mode=row.completion_mode,
     )
 
 
@@ -52,4 +54,7 @@ def to_section(row: SectionRow) -> Section:
         position=row.position,
         content_type=SectionContentType(row.content_type),
         body=row.body,
+        requires_pass=row.requires_pass,
+        is_preview=row.is_preview,
+        terminal_enabled=row.terminal_enabled,
     )

@@ -12,7 +12,53 @@ Peran:
 - **Operator VPS** — permission `servers.view|create|update|delete|console`
   (biasanya admin). Mengelola inventori VPS.
 
-## Tabel endpoint × peran
+## Grup API kanonis
+
+Untuk memilih API berdasarkan aktor, buka grup `Admin ...` untuk pengelolaan dan
+grup `Learner ...` untuk aktivitas peserta. Semua endpoint tetap memakai
+`Authorization: Bearer <JWT User Management>`.
+
+### Admin
+
+| Area | Grup | Prefix |
+|---|---|---|
+| Course | `Admin Courses` | `/api/admin/courses` |
+| Module | `Admin Modules` | `/api/admin/courses/{course_slug}/modules` |
+| Section | `Admin Sections` | `/api/admin/courses/{course_slug}/modules/{module_slug}/sections` |
+| Quiz | `Admin Quizzes` | `/api/admin/courses/.../quizzes` dan konfigurasi section |
+| Enrollment | `Admin Enrollment` | `/api/admin/courses/{course_slug}/enrollments` dan `/api/admin/enrollments` |
+| Lab course | `Admin Course Labs` | `/api/admin/courses/{course_slug}/lab` |
+| Collect task | `Admin Collect Tasks` | `/api/admin/collect-tasks` |
+| File tugas | `Admin Files` | `/api/admin/files/{file_id}` |
+| Inventori VPS | `Admin Servers` | `/api/admin/servers` |
+| Console VPS | — | `/api/admin/servers/{server_id}/console` |
+| Overview LMS | `Admin LMS Overview` | `/api/admin/lms/overview` |
+
+### Learner
+
+| Area | Grup | Prefix |
+|---|---|---|
+| Course | `Learner Courses` | `/api/learner/courses` |
+| Module | `Learner Modules` | `/api/learner/courses/{course_slug}/modules` |
+| Section | `Learner Sections` | `/api/learner/courses/{course_slug}/modules/{module_slug}/sections` |
+| Quiz | `Learner Quizzes` | `/api/learner/courses/.../quiz` dan `/api/learner/quiz-sittings` |
+| Enrollment | `Learner Enrollment` | `/api/learner/courses/{course_slug}/enrollments` dan `/api/learner/enrollments` |
+| Lab course | `Learner Course Labs` | `/api/learner/courses/{course_slug}/lab` |
+| Collect task | `Learner Collect Tasks` | `/api/learner/courses/.../collect-task` |
+| File tugas | `Learner Files` | `/api/learner/files/{file_id}` |
+| Inventori VPS | — | — |
+| Console VPS | — | `/api/learner/servers/{server_id}/console` |
+
+Endpoint admin memakai guard editor atau permission `servers.*` sesuai area. Endpoint learner
+tetap memeriksa publikasi konten, enrollment, progres, dan kepemilikan data. Operasi enrollment
+learner hanya berlaku untuk dirinya sendiri.
+
+## Tabel endpoint × peran — Legacy Compatibility
+
+Rute pada tabel berikut adalah path lama. Selama migrasi, path REST tersebut tetap aktif,
+ditampilkan di grup `Legacy Compatibility`, dan ditandai deprecated di OpenAPI. WebSocket
+lama `/api/v1/servers/{server_id}/console` tetap aktif dengan status legacy yang sama secara
+dokumentasi. Gunakan prefix kanonis pada tabel di atas untuk integrasi baru.
 
 | Area | Endpoint | Admin | Peserta | Catatan |
 |---|---|---|---|---|
@@ -23,6 +69,8 @@ Peran:
 | Section | `GET .../sections`, `GET .../sections/{s}` | ✅ | ✅ `PUBLISHED` saja (termasuk `body` materi + instruksi lab) | — |
 | Section | `POST .../sections`, `PUT .../sections/order`, `PATCH /{s}`, `DELETE /{s}` | ✅ | ❌ | `content_type`: `MATERIAL`, `LAB_TASK`, `QUIZ` |
 | Quiz kelola | `PATCH .../sections/{s}/quiz` | ✅ | ❌ 403 | Konfigurasi (exam, attempts, policy) |
+| Quiz kelola | `GET/POST /api/courses/{slug}/quizzes`, `PATCH/DELETE .../quizzes/{quiz}` | ✅ editor | ❌ 403 | CRUD metadata/policy Course; delete hanya kuis mandiri, response delete 204 |
+| Quiz relasi | `PUT/DELETE .../modules/{m}/sections/{s}/quiz` | ✅ editor | ❌ 403 | Quiz dan Section harus satu Course; Section harus `QUIZ`; satu-ke-satu; unlink mempertahankan keduanya |
 | Quiz kelola | `POST .../quiz/questions`, `PATCH .../quiz/questions/{q}` | ✅ | ❌ 403 | Kunci jawaban TIDAK PERNAH keluar di response mana pun |
 | Quiz kerjakan | `POST .../quiz/sittings` | ✅ boleh ikut | ✅ | Mulai/lanjut attempt milik sendiri |
 | Quiz kerjakan | `PUT /api/quiz-sittings/{id}/answers` | ✅ milik sendiri | ✅ milik sendiri | Ownership dicek (`_owned_sitting`) |
@@ -43,7 +91,7 @@ Peran:
 
 1. Buat course → module → section (`MATERIAL`/`LAB_TASK`/`QUIZ`).
 2. Konfigurasi quiz + tambah soal dan jawaban benar.
-3. Daftarkan VPS di inventori (`POST /api/v1/servers`).
+3. Daftarkan VPS di inventori (`POST /api/admin/servers`).
 4. Daftarkan peserta (`POST .../enrollments`), pantau (`GET .../enrollments`, `GET .../lab/accesses`), tandai tuntas (`POST .../{user}/complete`).
 
 ```bash
@@ -51,37 +99,37 @@ TOKEN=... # JWT admin/instructor
 BASE=http://localhost:8000
 
 curl -s -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{"title":"Docker Dasar","slug":"docker-dasar"}' $BASE/api/courses
+  -d '{"title":"Docker Dasar","slug":"docker-dasar"}' $BASE/api/admin/courses
 
 curl -s -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{"title":"Modul 1","slug":"modul-1"}' $BASE/api/courses/docker-dasar/modules
+  -d '{"title":"Modul 1","slug":"modul-1"}' $BASE/api/admin/courses/docker-dasar/modules
 
 curl -s -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d '{"title":"Lab 1","slug":"lab-1","content_type":"LAB_TASK","position":0,"body":"Tugas: ..."}' \
-  $BASE/api/courses/docker-dasar/modules/modul-1/sections
+  $BASE/api/admin/courses/docker-dasar/modules/modul-1/sections
 
 curl -s -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d '{"name":"lab-box-1","host":"10.0.0.5","username":"peserta","credential":{"method":"PASSWORD","password":"R4HASIA"}}' \
-  $BASE/api/v1/servers
+  $BASE/api/admin/servers
 
 curl -s -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{"user_id":"peserta-1"}' $BASE/api/courses/docker-dasar/enrollments
+  -d '{"user_id":"peserta-1"}' $BASE/api/admin/courses/docker-dasar/enrollments
 
 # Bulk: boleh campur user_id dan email (maks 100), jawaban 207 per-item
 curl -s -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d '{"users":[{"user_id":"peserta-2"},{"email":"peserta3@contoh.id"},{"email":"salah@alamat.id"}]}' \
-  $BASE/api/courses/docker-dasar/enrollments/bulk
+  $BASE/api/admin/courses/docker-dasar/enrollments/bulk
 # → {"data":{"enrolled":[…],"skipped":[…],"failed":[{"identifier":"salah@alamat.id","reason":"NOT_FOUND"}]}}
 ```
 
 ## Alur 2 — Peserta mengambil materi/lab/quiz
 
-1. Daftar course → baca section `PUBLISHED` → minta lab → buka console → kerjakan quiz.
+1. Temukan course publik → daftar ke course sendiri → baca section `PUBLISHED` → minta lab → buka console → kerjakan quiz.
 
 ```bash
 TOKEN=... # JWT peserta
 BASE=http://localhost:8000
-C=$BASE/api/courses/docker-dasar
+C=$BASE/api/learner/courses/docker-dasar
 
 curl -s -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d '{"user_id":"peserta-1"}' $C/enrollments
@@ -94,11 +142,12 @@ curl -s -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
 curl -s -H "Authorization: Bearer $TOKEN" $C/lab/my-lab
 
 # Console via WebSocket (token sebagai subprotocol "bearer.<JWT>"):
-# wscat -c "ws://localhost:8000/api/v1/servers/<server_id>/console" \
+# wscat -c "ws://localhost:8000/api/learner/servers/<server_id>/console" \
 #   --subprotocol "bearer.$TOKEN"   # server membalas {"type":"ready"}
+# Untuk koneksi admin/operator, gunakan /api/admin/servers/<server_id>/console.
 
 curl -s -H "Authorization: Bearer $TOKEN" -X POST \
-  $BASE/api/courses/docker-dasar/modules/modul-1/sections/kuis-1/quiz/sittings
+  $C/modules/modul-1/sections/kuis-1/quiz/sittings
 ```
 
 ## Catatan keamanan

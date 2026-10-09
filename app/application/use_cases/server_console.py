@@ -73,10 +73,10 @@ class ServerConsoleUseCase:
                 term=term,
             )
         except SshConsoleError as exc:
-            self.registry.release(server_id)
+            self.registry.release(server_id, session_id)
             raise ConsoleNotOpenable(exc.reason) from exc
         except Exception as exc:
-            self.registry.release(server_id)
+            self.registry.release(server_id, session_id)
             raise ConsoleNotOpenable("server_error") from exc
 
         if server.host_key is None and learned_host_key is not None:
@@ -99,11 +99,11 @@ class ServerConsoleUseCase:
         if slot is not None:
             if slot.session is not None:
                 await slot.session.close()
-            self.registry.release(server_id)
+            self.registry.release(server_id, slot.session_id)
         return await self.open(server_id, term, session_id)
 
-    async def close(self, server_id: UUID) -> None:
-        self.registry.release(server_id)
+    async def close(self, server_id: UUID, session_id: str) -> None:
+        self.registry.release(server_id, session_id)
 
 
 def now_utc() -> datetime:

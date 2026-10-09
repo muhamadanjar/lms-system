@@ -67,8 +67,12 @@ class FakeRegistry:
     def active(self, server_id: UUID):
         return self._slots.get(server_id)
 
-    def release(self, server_id: UUID) -> None:
-        self._slots.pop(server_id, None)
+    def release(self, server_id: UUID, session_id: str) -> bool:
+        slot = self._slots.get(server_id)
+        if slot is None or slot.session_id != session_id:
+            return False
+        del self._slots[server_id]
+        return True
 
     def release_all(self) -> None:
         self._slots.clear()

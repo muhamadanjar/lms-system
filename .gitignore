@@ -18,6 +18,7 @@ htmlcov/
 graphify-out
 __pycache__
 media
+var/private-files/
 logs
 .mypy_cache/
 .ruff_cache/

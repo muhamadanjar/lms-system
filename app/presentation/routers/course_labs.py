@@ -9,7 +9,9 @@ from app.presentation.dependencies.auth import get_current_user, require_content
 from app.presentation.schemas.content import ApiResponse
 from app.presentation.schemas.lab_access import CourseLabAccessRead, EnrollmentCreate
 
-router = APIRouter(prefix="/api/courses/{course_slug}/lab", tags=["CourseLabs"])
+router = APIRouter(prefix="/api/courses/{course_slug}/lab", tags=["Legacy Compatibility"])
+admin_router = APIRouter(prefix="/api/admin/courses/{course_slug}/lab", tags=["Admin Course Labs"])
+learner_router = APIRouter(prefix="/api/learner/courses/{course_slug}/lab", tags=["Learner Course Labs"])
 
 
 def use_cases(uow: SqlModelUnitOfWork) -> LabEnrollmentUseCases:
@@ -26,7 +28,8 @@ def _authorize_enrollment(user: CurrentUser, target_user_id: str) -> None:
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role")
 
 
-@router.get("/my-lab", response_model=ApiResponse[CourseLabAccessRead | None])
+@router.get("/my-lab", response_model=ApiResponse[CourseLabAccessRead | None], deprecated=True)
+@learner_router.get("/my-lab", response_model=ApiResponse[CourseLabAccessRead | None])
 async def get_my_lab_access(
     course_slug: str,
     user: CurrentUser = Depends(get_current_user),
@@ -36,7 +39,7 @@ async def get_my_lab_access(
     return ApiResponse(data=access_read(access) if access is not None else None, meta={"resource": "course_lab_access"})
 
 
-@router.post("/enroll", response_model=ApiResponse[CourseLabAccessRead], status_code=status.HTTP_201_CREATED)
+@router.post("/enroll", response_model=ApiResponse[CourseLabAccessRead], status_code=status.HTTP_201_CREATED, deprecated=True)
 async def enroll_lab(
     course_slug: str,
     payload: EnrollmentCreate,
@@ -48,7 +51,31 @@ async def enroll_lab(
     return ApiResponse(data=access_read(access), meta={"resource": "course_lab_access"})
 
 
-@router.delete("/release/{user_id}", response_model=ApiResponse[CourseLabAccessRead])
+@admin_router.post("/enroll", response_model=ApiResponse[CourseLabAccessRead], status_code=status.HTTP_201_CREATED)
+async def admin_enroll_lab(
+    course_slug: str,
+    payload: EnrollmentCreate,
+    _user: CurrentUser = Depends(require_content_editor),
+    uow: SqlModelUnitOfWork = Depends(get_uow),
+):
+    access = await use_cases(uow).enroll(course_slug, payload.user_id)
+    return ApiResponse(data=access_read(access), meta={"resource": "course_lab_access"})
+
+
+@learner_router.post("/enroll", response_model=ApiResponse[CourseLabAccessRead], status_code=status.HTTP_201_CREATED)
+async def learner_enroll_lab(
+    course_slug: str,
+    payload: EnrollmentCreate,
+    user: CurrentUser = Depends(get_current_user),
+    uow: SqlModelUnitOfWork = Depends(get_uow),
+):
+    if payload.user_id != user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Learners can only request their own lab access")
+    access = await use_cases(uow).enroll(course_slug, user.id)
+    return ApiResponse(data=access_read(access), meta={"resource": "course_lab_access"})
+
+
+@router.delete("/release/{user_id}", response_model=ApiResponse[CourseLabAccessRead], deprecated=True)
 async def release_lab(
     course_slug: str,
     user_id: str,
@@ -60,7 +87,32 @@ async def release_lab(
     return ApiResponse(data=access_read(access), meta={"resource": "course_lab_access"})
 
 
-@router.get("/accesses", response_model=ApiResponse[list[CourseLabAccessRead]])
+@admin_router.delete("/release/{user_id}", response_model=ApiResponse[CourseLabAccessRead])
+async def admin_release_lab(
+    course_slug: str,
+    user_id: str,
+    _user: CurrentUser = Depends(require_content_editor),
+    uow: SqlModelUnitOfWork = Depends(get_uow),
+):
+    access = await use_cases(uow).release(course_slug, user_id)
+    return ApiResponse(data=access_read(access), meta={"resource": "course_lab_access"})
+
+
+@learner_router.delete("/release/{user_id}", response_model=ApiResponse[CourseLabAccessRead])
+async def learner_release_lab(
+    course_slug: str,
+    user_id: str,
+    user: CurrentUser = Depends(get_current_user),
+    uow: SqlModelUnitOfWork = Depends(get_uow),
+):
+    if user_id != user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Learners can only release their own lab access")
+    access = await use_cases(uow).release(course_slug, user.id)
+    return ApiResponse(data=access_read(access), meta={"resource": "course_lab_access"})
+
+
+@router.get("/accesses", response_model=ApiResponse[list[CourseLabAccessRead]], deprecated=True)
+@admin_router.get("/accesses", response_model=ApiResponse[list[CourseLabAccessRead]])
 async def list_lab_accesses(
     course_slug: str,
     _user: CurrentUser = Depends(require_content_editor),

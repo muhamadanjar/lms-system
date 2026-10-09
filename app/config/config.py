@@ -3,6 +3,7 @@ from pydantic import AliasChoices, Field
 from functools import lru_cache
 from .cors import CORSSettings
 from .database import DatabaseSettings
+from .file_storage import FileStorageSettings
 from .ssh import SSHConsoleSettings
 from .usermanagement import UserManagementSettings
 
@@ -17,6 +18,7 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO", validation_alias=AliasChoices("LOG_LEVEL", "APP_LOG_LEVEL"))
 
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
+    file_storage: FileStorageSettings = Field(default_factory=FileStorageSettings)
     cors: CORSSettings = Field(default_factory=CORSSettings)
     usermanagement: UserManagementSettings = Field(default_factory=UserManagementSettings)
     ssh: SSHConsoleSettings = Field(default_factory=SSHConsoleSettings)

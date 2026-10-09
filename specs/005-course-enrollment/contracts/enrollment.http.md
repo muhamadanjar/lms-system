@@ -65,3 +65,13 @@ POST /api/courses/{slug}/lab/enroll without live enrollment
 ```text
 { "data": null, "error": { "code": "ENROLLMENT_REQUIRED | COURSE_NOT_FOUND | ENROLLMENT_NOT_FOUND | FORBIDDEN", "message": "..." }, "meta": {...} }
 ```
+
+## Global admin listing (editors)
+
+```text
+GET /api/enrollments?page=1&page_size=20&search=...&course_slug=...&enrolled_from=...&enrolled_to=...&status=ENROLLED
+Auth: admin/instructor
+200 ApiResponse with data: EnrollmentAdminRead[] and meta: { page, page_size, total, resource }
+```
+
+All filters are optional. Search matches participant user ID, enrollment ID, Course title, Course slug, and status. Date bounds are inclusive UTC timestamps for `enrolled_at`; the Dashboard converts inclusive Asia/Jakarta calendar dates to ISO bounds. `status` accepts ENROLLED, COMPLETED, or WITHDRAWN. Results are ordered by `enrolled_at` descending and ID ascending. Each row adds `course_slug` and `course_title` to the standard enrollment fields. `page_size` is limited to 100.

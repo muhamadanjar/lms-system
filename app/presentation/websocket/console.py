@@ -148,6 +148,8 @@ async def _safe_close(session) -> None:
 
 
 @ws_router.websocket("/api/v1/servers/{server_id}/console")
+@ws_router.websocket("/api/admin/servers/{server_id}/console")
+@ws_router.websocket("/api/learner/servers/{server_id}/console")
 async def console_websocket(ws: WebSocket, server_id: UUID):
     echo: str | None = None
     try:
@@ -159,7 +161,11 @@ async def console_websocket(ws: WebSocket, server_id: UUID):
         await ws.send_text(json.dumps(_frame_closed("auth_error")))
         await ws.close(code=4401)
         return
-    if not await user_may_open_console(user, server_id):
+    if ws.url.path.startswith("/api/admin/servers/"):
+        may_open = user.is_superuser or user.has_permission(("servers.view", "servers.console"))
+    else:
+        may_open = await user_may_open_console(user, server_id)
+    if not may_open:
         await ws.accept()
         await ws.send_text(json.dumps(_frame_closed("permission_error")))
         await ws.close(code=4403)
@@ -260,7 +266,7 @@ async def console_websocket(ws: WebSocket, server_id: UUID):
         if session is not None:
             await _safe_close(session)
         try:
-            await use_case.close(server_id)
+            await use_case.close(server_id, session_id)
         except Exception:
             pass
         try:

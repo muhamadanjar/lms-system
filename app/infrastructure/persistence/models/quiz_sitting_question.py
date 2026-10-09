@@ -13,7 +13,8 @@ class QuizSittingQuestion(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     sitting_id: UUID = Field(sa_column=Column(Uuid(), ForeignKey("quiz_sittings.id", ondelete="CASCADE", name="fk_sitting_questions_sitting"), nullable=False, index=True))
-    source_question_id: UUID = Field(sa_column=Column(Uuid(), ForeignKey("questions.id", name="fk_sitting_questions_source_question"), nullable=False))
+    # Historical source identity; snapshots intentionally outlive authoring rows.
+    source_question_id: UUID = Field(sa_column=Column(Uuid(), nullable=False))
     question_code: str = Field(sa_column=Column(String(80), nullable=False))
     prompt: str = Field(sa_type=Text)
     question_type: str = Field(sa_column=Column(String(12), nullable=False))

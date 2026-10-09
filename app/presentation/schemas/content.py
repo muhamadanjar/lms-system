@@ -5,6 +5,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.domain.value_objects.content import ContentStatus, SectionContentType
+from app.domain.value_objects.learning_policy import CompletionMode, ProgressionMode
 
 T = TypeVar("T")
 
@@ -37,6 +38,8 @@ class CourseCreate(BaseModel):
     description: str | None = None
     slug: str = Field(min_length=1, max_length=160)
     status: ContentStatus = ContentStatus.DRAFT
+    progression_mode: ProgressionMode = ProgressionMode.FREE
+    completion_mode: CompletionMode = CompletionMode.SELF_LEARNING
 
 
 class CourseUpdate(BaseModel):
@@ -44,6 +47,8 @@ class CourseUpdate(BaseModel):
     description: str | None = None
     slug: str | None = Field(default=None, min_length=1, max_length=160)
     status: ContentStatus | None = None
+    progression_mode: ProgressionMode | None = None
+    completion_mode: CompletionMode | None = None
 
 
 class ModuleCreate(BaseModel):
@@ -70,6 +75,9 @@ class SectionCreate(BaseModel):
     status: ContentStatus = ContentStatus.DRAFT
     content_type: SectionContentType = SectionContentType.MATERIAL
     body: str | None = None
+    requires_pass: bool = False
+    is_preview: bool = False
+    terminal_enabled: bool = False
 
 
 class SectionUpdate(BaseModel):
@@ -80,6 +88,9 @@ class SectionUpdate(BaseModel):
     status: ContentStatus | None = None
     content_type: SectionContentType | None = None
     body: str | None = None
+    requires_pass: bool | None = None
+    is_preview: bool | None = None
+    terminal_enabled: bool | None = None
 
 
 class OrderItem(BaseModel):
@@ -110,6 +121,10 @@ class SectionRead(BaseModel):
     status: ContentStatus
     content_type: SectionContentType
     body: str | None
+    requires_pass: bool = False
+    is_preview: bool = False
+    terminal_enabled: bool = False
+    is_accessible: bool = True
     created_at: datetime
     updated_at: datetime
 
@@ -135,22 +150,26 @@ class CourseRead(BaseModel):
     title: str
     description: str | None
     status: ContentStatus
+    progression_mode: ProgressionMode = ProgressionMode.FREE
+    completion_mode: CompletionMode = CompletionMode.SELF_LEARNING
     created_at: datetime
     updated_at: datetime
     modules: list[ModuleRead] = Field(default_factory=list)
 
 
-def section_read(section) -> SectionRead:
-    return SectionRead.model_validate(section)
+def section_read(section, is_accessible: bool = True) -> SectionRead:
+    return SectionRead.model_validate({**section.__dict__, "is_accessible": is_accessible})
 
 
-def module_read(module, sections=()) -> ModuleRead:
-    return ModuleRead.model_validate({**module.__dict__, "sections": [section_read(section) for section in sections]})
+def module_read(module, sections=(), access_by_id=None) -> ModuleRead:
+    access_by_id = access_by_id or {}
+    return ModuleRead.model_validate({**module.__dict__, "sections": [section_read(section, access_by_id.get(section.id, True)) for section in sections]})
 
 
-def course_read(course, modules=(), sections_by_module=None) -> CourseRead:
+def course_read(course, modules=(), sections_by_module=None, access_by_id=None) -> CourseRead:
     sections_by_module = sections_by_module or {}
+    access_by_id = access_by_id or {}
     return CourseRead.model_validate({
         **course.__dict__,
-        "modules": [module_read(module, sections_by_module.get(module.id, ())) for module in modules],
+        "modules": [module_read(module, sections_by_module.get(module.id, ()), access_by_id) for module in modules],
     })

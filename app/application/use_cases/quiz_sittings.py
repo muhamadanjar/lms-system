@@ -7,7 +7,10 @@ from app.application.dto.quiz_sittings import (
     AnswerSelectionInput,
     QuestionScoreDTO,
     QuizResultSummaryDTO,
+    QuizSittingContentDTO,
     QuizSittingDraftDTO,
+    QuizSittingOptionDTO,
+    QuizSittingQuestionDTO,
     QuizSittingResultDTO,
 )
 from app.domain.entities.quiz_sitting import QuizSitting
@@ -18,6 +21,7 @@ from app.domain.entities.quiz_sitting_snapshot import (
 )
 from app.domain.exceptions import NotFoundError, ValidationError
 from app.domain.services.quiz_evaluation import evaluate_snapshot_question
+from app.domain.services.content_policy import validate_question_ready_for_attempt
 from app.domain.value_objects.content import QuestionType, QuizAttemptState
 from app.domain.value_objects.quiz_assessment import QuestionCode
 
@@ -46,6 +50,7 @@ class QuizSittingUseCases:
                 if question.question_code is None:
                     raise ValidationError("question_code is required before starting a sitting")
                 answers = await uow.quizzes.list_answers(question)
+                validate_question_ready_for_attempt(question, answers, quiz.answer_policy)
                 snapshots.append(QuizSittingQuestionSnapshot(
                     sitting_id=sitting.id,
                     source_question_id=question.id,
@@ -76,6 +81,8 @@ class QuizSittingUseCases:
             quiz = await uow.quizzes.get_by_section(section.id)
             if quiz is None:
                 raise NotFoundError("quiz not found")
+            from app.application.use_cases.learner_progress import LearnerProgressUseCases
+            await LearnerProgressUseCases(lambda: uow)._assert_section_access(uow, learner_id, course.id, section.id)
             # Do not use start_or_resume here: both methods own a UoW boundary.
             active = await uow.sittings.get_active(quiz.id, learner_id)
             if active is not None:
@@ -90,6 +97,7 @@ class QuizSittingUseCases:
                 if question.question_code is None:
                     raise ValidationError("question_code is required before starting a sitting")
                 answers = await uow.quizzes.list_answers(question)
+                validate_question_ready_for_attempt(question, answers, quiz.answer_policy)
                 snapshots.append(QuizSittingQuestionSnapshot(sitting_id=sitting.id, source_question_id=question.id, question_code=question.question_code, prompt=question.prompt, question_type=question.question_type, answer_policy=quiz.answer_policy, position=question.position, options=tuple(QuizSittingOptionSnapshot(source_answer_id=answer.id, value=answer.value, position=answer.position, is_correct=bool(answer.is_correct)) for answer in answers)))
             await uow.sittings.save_snapshot(snapshots)
             await uow.commit()
@@ -148,6 +156,12 @@ class QuizSittingUseCases:
                 await uow.sittings.reserve_exam_finalization(quiz.id, learner_id, quiz.max_attempts)
             sitting.finalize(result.total_score)
             await uow.sittings.save_final_result(sitting, result)
+            if quiz.section_id is not None and getattr(uow, "sections", None) is not None:
+                section = await uow.sections.get_by_id(quiz.section_id)
+                module = await uow.modules.get_by_id(section.module_id) if section else None
+                if module is not None:
+                    from app.application.use_cases.learner_progress import LearnerProgressUseCases
+                    await LearnerProgressUseCases(lambda: uow).refresh_self_learning_completion(uow, learner_id, module.course_id)
             await uow.commit()
             return self._result_dto(result)
 
@@ -157,6 +171,32 @@ class QuizSittingUseCases:
             result = await uow.sittings.get_final_result(sitting_id)
             return self._result_dto(result) if result is not None else await self._draft_dto(uow, sitting)
 
+    async def content(self, sitting_id: UUID, learner_id: str) -> QuizSittingContentDTO:
+        """Return the owner's immutable quiz snapshot without answer correctness."""
+        async with self.uow as uow:
+            sitting = await self._owned_sitting(uow, sitting_id, learner_id)
+            snapshot = await uow.sittings.get_snapshot(sitting_id)
+            selected = await uow.sittings.selected_option_ids(sitting_id)
+            return QuizSittingContentDTO(
+                id=sitting.id,
+                quiz_id=sitting.quiz_id,
+                attempt_state=str(sitting.attempt_state),
+                questions=tuple(
+                    QuizSittingQuestionDTO(
+                        question_code=str(question.question_code),
+                        prompt=question.prompt,
+                        answer_policy=str(question.answer_policy),
+                        position=question.position,
+                        options=tuple(
+                            QuizSittingOptionDTO(id=option.id, value=option.value, position=option.position)
+                            for option in sorted(question.options, key=lambda item: item.position)
+                        ),
+                        selected_option_ids=tuple(sorted(selected.get(question.id, set()), key=str)),
+                    )
+                    for question in sorted(snapshot, key=lambda item: item.position)
+                ),
+            )
+
     async def summary(self, quiz_id: UUID, learner_id: str) -> QuizResultSummaryDTO:
         async with self.uow as uow:
             quiz = await uow.quizzes.get_by_id(quiz_id)
@@ -164,10 +204,13 @@ class QuizSittingUseCases:
                 raise NotFoundError("quiz not found")
             results = await uow.sittings.list_final_results(quiz_id, learner_id)
             canonical = max(results, key=lambda result: result.total_score, default=None)
+            best_percentage = (canonical.total_score / max(1, len(canonical.available_question_codes))) * 100 if canonical else None
             return QuizResultSummaryDTO(
                 quiz_id=quiz_id,
                 is_exam=quiz.is_exam,
                 best_score=canonical.total_score if canonical else None,
+                best_percentage=best_percentage,
+                is_passed=best_percentage >= quiz.passing_score if best_percentage is not None else None,
                 finalized_attempts=len(results),
                 max_attempts=quiz.max_attempts if quiz.is_exam else None,
                 result=self._result_dto(canonical) if canonical else None,
@@ -189,7 +232,8 @@ class QuizSittingUseCases:
                 raise NotFoundError("quiz not found")
             results = await uow.sittings.list_final_results(quiz.id, learner_id)
             canonical = max(results, key=lambda result: result.total_score, default=None)
-            return QuizResultSummaryDTO(quiz_id=quiz.id, is_exam=quiz.is_exam, best_score=canonical.total_score if canonical else None, finalized_attempts=len(results), max_attempts=quiz.max_attempts if quiz.is_exam else None, result=self._result_dto(canonical) if canonical else None)
+            best_percentage = (canonical.total_score / max(1, len(canonical.available_question_codes))) * 100 if canonical else None
+            return QuizResultSummaryDTO(quiz_id=quiz.id, is_exam=quiz.is_exam, best_score=canonical.total_score if canonical else None, best_percentage=best_percentage, is_passed=best_percentage >= quiz.passing_score if best_percentage is not None else None, finalized_attempts=len(results), max_attempts=quiz.max_attempts if quiz.is_exam else None, result=self._result_dto(canonical) if canonical else None)
 
     async def _owned_sitting(self, uow, sitting_id: UUID, learner_id: str) -> QuizSitting:
         sitting = await uow.sittings.get_by_id(sitting_id)

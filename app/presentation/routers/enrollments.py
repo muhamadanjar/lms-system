@@ -17,7 +17,9 @@ from app.presentation.schemas.enrollment import (
     EnrollmentRead,
 )
 
-router = APIRouter(prefix="/api/courses/{course_slug}/enrollments", tags=["Enrollments"])
+router = APIRouter(prefix="/api/courses/{course_slug}/enrollments", tags=["Legacy Compatibility"])
+admin_router = APIRouter(prefix="/api/admin/courses/{course_slug}/enrollments", tags=["Admin Enrollment"])
+learner_router = APIRouter(prefix="/api/learner/courses/{course_slug}/enrollments", tags=["Learner Enrollment"])
 
 
 def _directory() -> UserManagementDirectory:
@@ -39,7 +41,7 @@ def _authorize_self_or_editor(user: CurrentUser, target_user_id: str) -> None:
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role")
 
 
-@router.post("", response_model=ApiResponse[EnrollmentRead], status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ApiResponse[EnrollmentRead], status_code=status.HTTP_201_CREATED, deprecated=True)
 async def enroll_course(
     course_slug: str,
     payload: EnrollmentCreate,
@@ -52,7 +54,32 @@ async def enroll_course(
     return ApiResponse(data=enrollment_read(enrollment), meta={"resource": "enrollment"})
 
 
-@router.get("/me", response_model=ApiResponse[EnrollmentRead | None])
+@admin_router.post("", response_model=ApiResponse[EnrollmentRead], status_code=status.HTTP_201_CREATED)
+async def admin_enroll_course(
+    course_slug: str,
+    payload: EnrollmentCreate,
+    _user: CurrentUser = Depends(require_content_editor),
+    uow: SqlModelUnitOfWork = Depends(get_uow),
+):
+    enrollment = await use_cases(uow).enroll(course_slug, payload.user_id, enrolled_at=payload.enrolled_at)
+    return ApiResponse(data=enrollment_read(enrollment), meta={"resource": "enrollment"})
+
+
+@learner_router.post("", response_model=ApiResponse[EnrollmentRead], status_code=status.HTTP_201_CREATED)
+async def learner_enroll_course(
+    course_slug: str,
+    payload: EnrollmentCreate,
+    user: CurrentUser = Depends(get_current_user),
+    uow: SqlModelUnitOfWork = Depends(get_uow),
+):
+    if payload.user_id != user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Learners can only enroll themselves")
+    enrollment = await use_cases(uow).enroll(course_slug, user.id)
+    return ApiResponse(data=enrollment_read(enrollment), meta={"resource": "enrollment"})
+
+
+@router.get("/me", response_model=ApiResponse[EnrollmentRead | None], deprecated=True)
+@learner_router.get("/me", response_model=ApiResponse[EnrollmentRead | None])
 async def get_my_enrollment(
     course_slug: str,
     user: CurrentUser = Depends(get_current_user),
@@ -62,7 +89,7 @@ async def get_my_enrollment(
     return ApiResponse(data=enrollment_read(enrollment) if enrollment is not None else None, meta={"resource": "enrollment"})
 
 
-@router.get("", response_model=ApiResponse[list[EnrollmentRead]])
+@router.get("", response_model=ApiResponse[list[EnrollmentRead]], deprecated=True)
 async def list_enrollments(
     course_slug: str,
     _user: CurrentUser = Depends(require_content_editor),
@@ -72,7 +99,18 @@ async def list_enrollments(
     return ApiResponse(data=[enrollment_read(e) for e in live], meta={"resource": "enrollments"})
 
 
-@router.post("/{user_id}/complete", response_model=ApiResponse[EnrollmentRead])
+@admin_router.get("", response_model=ApiResponse[list[EnrollmentRead]])
+async def list_admin_course_enrollments(
+    course_slug: str,
+    _user: CurrentUser = Depends(require_content_editor),
+    uow: SqlModelUnitOfWork = Depends(get_uow),
+):
+    live = await use_cases(uow).list_course_enrollments(course_slug)
+    return ApiResponse(data=[enrollment_read(e) for e in live], meta={"resource": "enrollments"})
+
+
+@router.post("/{user_id}/complete", response_model=ApiResponse[EnrollmentRead], deprecated=True)
+@admin_router.post("/{user_id}/complete", response_model=ApiResponse[EnrollmentRead])
 async def complete_enrollment(
     course_slug: str,
     user_id: str,
@@ -84,7 +122,7 @@ async def complete_enrollment(
     return ApiResponse(data=enrollment_read(enrollment), meta={"resource": "enrollment"})
 
 
-@router.post("/{user_id}/withdraw", response_model=ApiResponse[EnrollmentRead])
+@router.post("/{user_id}/withdraw", response_model=ApiResponse[EnrollmentRead], deprecated=True)
 async def withdraw_enrollment(
     course_slug: str,
     user_id: str,
@@ -96,7 +134,32 @@ async def withdraw_enrollment(
     return ApiResponse(data=enrollment_read(enrollment), meta={"resource": "enrollment"})
 
 
-@router.post("/bulk", response_model=ApiResponse[BulkEnrollResponse], status_code=status.HTTP_207_MULTI_STATUS)
+@admin_router.post("/{user_id}/withdraw", response_model=ApiResponse[EnrollmentRead])
+async def admin_withdraw_enrollment(
+    course_slug: str,
+    user_id: str,
+    _user: CurrentUser = Depends(require_content_editor),
+    uow: SqlModelUnitOfWork = Depends(get_uow),
+):
+    enrollment = await use_cases(uow).withdraw(course_slug, user_id)
+    return ApiResponse(data=enrollment_read(enrollment), meta={"resource": "enrollment"})
+
+
+@learner_router.post("/{user_id}/withdraw", response_model=ApiResponse[EnrollmentRead])
+async def learner_withdraw_enrollment(
+    course_slug: str,
+    user_id: str,
+    user: CurrentUser = Depends(get_current_user),
+    uow: SqlModelUnitOfWork = Depends(get_uow),
+):
+    if user_id != user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Learners can only withdraw their own enrollment")
+    enrollment = await use_cases(uow).withdraw(course_slug, user.id)
+    return ApiResponse(data=enrollment_read(enrollment), meta={"resource": "enrollment"})
+
+
+@router.post("/bulk", response_model=ApiResponse[BulkEnrollResponse], status_code=status.HTTP_207_MULTI_STATUS, deprecated=True)
+@admin_router.post("/bulk", response_model=ApiResponse[BulkEnrollResponse], status_code=status.HTTP_207_MULTI_STATUS)
 async def bulk_enroll_course(
     course_slug: str,
     payload: BulkEnrollRequest,

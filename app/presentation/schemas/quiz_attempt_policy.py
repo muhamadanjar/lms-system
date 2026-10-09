@@ -7,3 +7,4 @@ class QuizConfigurationRequest(BaseModel):
     is_exam: bool = False
     max_attempts: int | None = Field(default=None, ge=1)
     answer_policy: AnswerPolicy = AnswerPolicy.SINGLE
+    passing_score: int = Field(default=70, ge=0, le=100)

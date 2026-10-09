@@ -19,6 +19,9 @@ class Section(ContentEntity):
     position: int = 0
     content_type: SectionContentType = SectionContentType.MATERIAL
     body: Optional[str] = None
+    requires_pass: bool = False
+    is_preview: bool = False
+    terminal_enabled: bool = False
 
     def __post_init__(self) -> None:
         super().__post_init__()
@@ -27,6 +30,8 @@ class Section(ContentEntity):
         self.title = ensure_text(self.title, "title", 255)
         self.position = ensure_position(self.position)
         self.content_type = SectionContentType(self.content_type)
+        if self.terminal_enabled and self.content_type is not SectionContentType.LAB_TASK:
+            raise ValidationError("terminal_enabled is only valid for LAB_TASK sections")
         if self.description is not None:
             self.description = self.description.strip()
 

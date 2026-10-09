@@ -71,6 +71,10 @@ class SqlModelQuizSittingRepository:
                 question_code=str(snapshot.question_code), prompt=snapshot.prompt,
                 question_type=str(snapshot.question_type), answer_policy=str(snapshot.answer_policy), position=snapshot.position,
             ))
+        # These models have no ORM relationship for SQLAlchemy to order the
+        # inserts, so persist the parent question rows before their options.
+        await self.session.flush()
+        for snapshot in snapshots:
             for option in snapshot.options:
                 self.session.add(QuizSittingOption(
                     id=option.id, sitting_question_id=snapshot.id, source_answer_id=option.source_answer_id,

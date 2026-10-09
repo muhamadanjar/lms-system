@@ -28,8 +28,21 @@ class Enrollment(SQLModel, table=True):
     course_id: UUID = Field(
         sa_column=Column(Uuid(), ForeignKey("courses.id", ondelete="CASCADE", name="fk_enrollments_course_id_courses"), nullable=False, index=True)
     )
-    status: str = Field(default="ENROLLED", sa_column=Column(String(10), nullable=False, index=True))
+    status: str = Field(default="ENROLLED", sa_column=Column(String(10), 
+        nullable=False, index=True))
     enrolled_at: datetime = Field(default_factory=utc_now)
     completed_at: Optional[datetime] = Field(default=None)
+    last_opened_section_id: Optional[UUID] = Field(
+        default=None,
+        sa_column=Column(
+            Uuid(),
+            ForeignKey(
+                "sections.id",
+                ondelete="SET NULL",
+                name="fk_enrollments_last_opened_section_id_sections",
+            ),
+            nullable=True,
+        ),
+    )
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)

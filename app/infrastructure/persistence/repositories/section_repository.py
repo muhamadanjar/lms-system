@@ -20,7 +20,7 @@ class SqlModelSectionRepository:
         if await self.session.get(ModuleRow, section.module_id) is None:
             raise NotFoundError("module not found")
         await self.slugs.reserve(str(section.slug), section.id, "section")
-        self.session.add(SectionRow(id=section.id, slug=str(section.slug), status=section.status, created_at=section.created_at, updated_at=section.updated_at, module_id=section.module_id, title=section.title, description=section.description, position=section.position, content_type=section.content_type, body=section.body))
+        self.session.add(SectionRow(id=section.id, slug=str(section.slug), status=section.status, created_at=section.created_at, updated_at=section.updated_at, module_id=section.module_id, title=section.title, description=section.description, position=section.position, content_type=section.content_type, body=section.body, requires_pass=section.requires_pass, is_preview=section.is_preview, terminal_enabled=section.terminal_enabled))
         await self.session.flush()
         return section
 
@@ -55,6 +55,9 @@ class SqlModelSectionRepository:
         if row.slug != str(section.slug) or row.module_id != section.module_id:
             raise ValidationError("section slug and parent are immutable in this operation")
         row.title, row.description, row.position, row.status, row.content_type, row.body, row.updated_at = section.title, section.description, section.position, section.status, section.content_type, section.body, section.updated_at
+        row.requires_pass = section.requires_pass
+        row.is_preview = section.is_preview
+        row.terminal_enabled = section.terminal_enabled
         await self.session.flush()
         return section
 

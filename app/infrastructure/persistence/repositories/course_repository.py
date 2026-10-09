@@ -33,6 +33,7 @@ class SqlModelCourseRepository:
         self.session.add(CourseRow(
             id=course.id, slug=str(course.slug), status=course.status, created_at=course.created_at,
             updated_at=course.updated_at, title=course.title, description=course.description,
+            progression_mode=course.progression_mode, completion_mode=course.completion_mode,
         ))
         await self.session.flush()
         return course
@@ -87,6 +88,7 @@ class SqlModelCourseRepository:
         if row.slug != str(course.slug):
             raise ValidationError("content slugs are immutable")
         row.title, row.description, row.status, row.updated_at = course.title, course.description, course.status, course.updated_at
+        row.progression_mode, row.completion_mode = course.progression_mode, course.completion_mode
         await self.session.flush()
         return course
 
@@ -95,7 +97,7 @@ class SqlModelCourseRepository:
         module_ids = [row.id for row in module_rows]
         section_rows = list((await self.session.exec(select(SectionRow).where(SectionRow.module_id.in_(module_ids)))).all()) if module_ids else []
         section_ids = [row.id for row in section_rows]
-        quiz_rows = list((await self.session.exec(select(Quiz).where(Quiz.section_id.in_(section_ids)))).all()) if section_ids else []
+        quiz_rows = list((await self.session.exec(select(Quiz).where(Quiz.course_id == course_id))).all())
         quiz_ids = [row.id for row in quiz_rows]
         question_rows = list((await self.session.exec(select(Question).where(Question.quiz_id.in_(quiz_ids)))).all()) if quiz_ids else []
         question_ids = [row.id for row in question_rows]

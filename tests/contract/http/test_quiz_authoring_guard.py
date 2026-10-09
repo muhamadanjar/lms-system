@@ -77,7 +77,43 @@ async def test_editor_may_configure_quiz(session):
     try:
         async with client:
             base = "/api/courses/quiz-guard-course/modules/quiz-guard-m/sections/quiz-guard-s/quiz"
-            response = await client.patch(base, json={"is_exam": False})
+            response = await client.patch(base, json={"is_exam": False, "passing_score": 82})
             assert response.status_code == 200, response.text
+            assert response.json()["data"]["passing_score"] == 82
+    finally:
+        app.dependency_overrides.clear()
+
+async def test_published_quiz_update_only_slug_is_immutable(session):
+    from app.domain.entities.course import Course
+    from app.domain.entities.module import Module
+    from app.domain.entities.quiz import Quiz
+    from app.domain.entities.section import Section
+    from app.domain.value_objects.content import SectionContentType
+
+    course = Course(slug="quiz-immutable-course", title="Q")
+    module = Module(slug="quiz-immutable-m", course_id=course.id, title="M")
+    section = Section(slug="quiz-immutable-s", module_id=module.id, title="Quiz", content_type=SectionContentType.QUIZ)
+    async with SqlModelUnitOfWork(session=session) as uow:
+        await uow.courses.create(course)
+        await uow.modules.create(module)
+        await uow.sections.create(section)
+        await uow.quizzes.create_quiz(Quiz(slug="quiz-immutable", section_id=section.id))
+        await uow.commit()
+
+    client = await _client(session, _user("admin-1", roles=("admin",)))
+    try:
+        async with client:
+            base = "/api/courses/quiz-immutable-course/quizzes/quiz-immutable"
+            assert (await client.patch(base, json={"status": "PUBLISHED"})).status_code == 200
+            response = await client.patch(
+                base,
+                json={"title": "Renamed quiz", "is_exam": True, "max_attempts": 3, "passing_score": 80},
+            )
+            assert response.status_code == 200, response.text
+            assert response.json()["data"]["title"] == "Renamed quiz"
+            assert response.json()["data"]["max_attempts"] == 3
+            assert (await client.patch(base, json={"slug": "new-slug"})).status_code == 422
+            listed = (await client.get("/api/courses/quiz-immutable-course/quizzes")).json()["data"]
+            assert [q["slug"] for q in listed] == ["quiz-immutable"]
     finally:
         app.dependency_overrides.clear()

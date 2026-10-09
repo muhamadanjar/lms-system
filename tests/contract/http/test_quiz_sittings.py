@@ -22,7 +22,8 @@ async def test_learner_quiz_sitting_contract_never_leaks_answer_key(session):
     section = Section(slug="http-quiz-section", module_id=module.id, title="Quiz", content_type=SectionContentType.QUIZ)
     quiz = Quiz(slug="http-quiz", section_id=section.id)
     question = Question(slug="http-question", quiz_id=quiz.id, prompt="One?", question_type=QuestionType.MULTICHOICE, weight=Decimal("1"), question_code="q-http-1")
-    answer = Answer(slug="http-answer", question_id=question.id, value="One", is_correct=True, question_type=QuestionType.MULTICHOICE)
+    answer = Answer(slug="http-answer", question_id=question.id, value="One", is_correct=True, question_type=QuestionType.MULTICHOICE, position=0)
+    distractor = Answer(slug="http-distractor", question_id=question.id, value="Two", is_correct=False, question_type=QuestionType.MULTICHOICE, position=1)
     async with SqlModelUnitOfWork(session=session) as uow:
         await uow.courses.create(course)
         await uow.modules.create(module)
@@ -30,6 +31,7 @@ async def test_learner_quiz_sitting_contract_never_leaks_answer_key(session):
         await uow.quizzes.create_quiz(quiz)
         await uow.quizzes.create_question(question)
         await uow.quizzes.create_answer(answer)
+        await uow.quizzes.create_answer(distractor)
         await uow.commit()
 
     async def override_uow():

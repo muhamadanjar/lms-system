@@ -22,9 +22,10 @@ async def test_exam_limit_applies_only_on_finalization(session):
     quiz = Quiz(slug="exam-quiz", section_id=section.id, is_exam=True, max_attempts=1)
     question = Question(slug="exam-question", quiz_id=quiz.id, prompt="One?", question_type=QuestionType.MULTICHOICE, weight=Decimal("1"), question_code="q-exam")
     answer = Answer(slug="exam-answer", question_id=question.id, value="One", is_correct=True, question_type=QuestionType.MULTICHOICE)
+    wrong_answer = Answer(slug="exam-wrong-answer", question_id=question.id, value="Two", position=1, is_correct=False, question_type=QuestionType.MULTICHOICE)
     async with SqlModelUnitOfWork(session=session) as uow:
         await uow.courses.create(course); await uow.modules.create(module); await uow.sections.create(section)
-        await uow.quizzes.create_quiz(quiz); await uow.quizzes.create_question(question); await uow.quizzes.create_answer(answer); await uow.commit()
+        await uow.quizzes.create_quiz(quiz); await uow.quizzes.create_question(question); await uow.quizzes.create_answer(answer); await uow.quizzes.create_answer(wrong_answer); await uow.commit()
 
     use_cases = QuizSittingUseCases(SqlModelUnitOfWork(session=session))
     first, _ = await use_cases.start_or_resume(quiz.id, "learner")
