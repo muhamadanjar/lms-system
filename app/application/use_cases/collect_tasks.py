@@ -3,12 +3,17 @@ from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import logging
 from pathlib import PurePosixPath
+from urllib.parse import quote
 from uuid import UUID, uuid4
 
+from app.application.dto.collect_task_review import CollectTaskReviewPage
+from app.application.dto.review_notification import ReviewNotification
 from app.application.dto.task_file_upload import MAX_TASK_FILES_PER_SUBMISSION, MAX_TASK_FILE_BYTES, MAX_TASK_SUBMISSION_BYTES, TaskFileUpload
 from app.application.ports.auth import CurrentUser
 from app.application.ports.file_storage import FileStoragePort
+from app.application.ports.notification_publisher import NotificationPublisherPort
 from app.domain.entities.collect_task import CollectTask, CollectTaskStatus
+from app.domain.entities.course import Course
 from app.domain.entities.file import FileMetadata
 from app.domain.exceptions import AuthorizationError, NotFoundError, ValidationError
 from app.domain.value_objects.content import ContentStatus, SectionContentType
@@ -20,8 +25,13 @@ STAGED_FILE_TTL = timedelta(hours=24)
 class CollectTaskUseCases:
     """Application workflows for learner task submissions and administrator review."""
 
-    def __init__(self, uow_factory: Callable):
+    def __init__(
+        self,
+        uow_factory: Callable,
+        notification_publisher: NotificationPublisherPort | None = None,
+    ):
         self.uow_factory = uow_factory
+        self.notification_publisher = notification_publisher
 
     async def submit(self, actor: CurrentUser, course_slug: str, module_slug: str, section_slug: str, text: str, evidence_urls: Sequence[str], uploads: Sequence[TaskFileUpload] = (), file_storage: FileStoragePort | None = None, file_ids: Sequence[UUID] = ()) -> CollectTask:
         if uploads and file_ids:
@@ -183,12 +193,60 @@ class CollectTaskUseCases:
             await uow.rollback()
             return task
 
-    async def list_for_review(self, actor: CurrentUser, status: CollectTaskStatus | None = None) -> list[CollectTask]:
+    async def list_review_courses(self, actor: CurrentUser) -> list[Course]:
         self._require_admin(actor)
         async with self.uow_factory() as uow:
-            result = await uow.learning_progress.list_tasks((status or CollectTaskStatus.SUBMITTED).value)
+            courses: list[Course] = []
+            if self._is_global_reviewer(actor):
+                offset = 0
+                while True:
+                    batch = await uow.courses.list(include_archived=True, offset=offset, limit=200)
+                    courses.extend(batch)
+                    if len(batch) < 200:
+                        break
+                    offset += len(batch)
+            else:
+                assignments = await uow.course_instructors.list_for_user(actor.id)
+                for assignment in assignments:
+                    course = await uow.courses.get_by_id(assignment.course_id)
+                    if course is not None:
+                        courses.append(course)
             await uow.rollback()
-            return result
+            return sorted(courses, key=lambda course: course.title.casefold())
+
+    async def list_for_review(
+        self,
+        actor: CurrentUser,
+        statuses: CollectTaskStatus | list[CollectTaskStatus] | None = None,
+        *,
+        course_id: UUID | None = None,
+        learner_ids: list[str] | None = None,
+        learner_search: str | None = None,
+        page: int = 1,
+        per_page: int = 20,
+    ) -> CollectTaskReviewPage:
+        self._require_admin(actor)
+        async with self.uow_factory() as uow:
+            scope_ids = None
+            if not self._is_global_reviewer(actor):
+                assignments = await uow.course_instructors.list_for_user(actor.id)
+                scope_ids = [assignment.course_id for assignment in assignments]
+            selected_statuses = (
+                [statuses]
+                if isinstance(statuses, CollectTaskStatus)
+                else statuses or [CollectTaskStatus.SUBMITTED, CollectTaskStatus.IN_REVIEW]
+            )
+            entries, total = await uow.learning_progress.list_tasks_for_review(
+                statuses=[item.value for item in selected_statuses],
+                course_id=course_id,
+                learner_ids=learner_ids,
+                learner_search=learner_search,
+                course_scope_ids=scope_ids,
+                offset=(page - 1) * per_page,
+                limit=per_page,
+            )
+            await uow.rollback()
+            return CollectTaskReviewPage(entries, total, page, per_page)
 
     async def review(self, actor: CurrentUser, task_id: UUID, action: str, *, score: int | None = None, note: str | None = None) -> CollectTask:
         self._require_admin(actor)
@@ -196,6 +254,14 @@ class CollectTaskUseCases:
             task = await uow.learning_progress.get_task_by_id(task_id)
             if task is None:
                 raise NotFoundError("collect task not found")
+            section = await uow.sections.get_by_id(task.section_id)
+            module = await uow.modules.get_by_id(section.module_id) if section else None
+            course = await uow.courses.get_by_id(module.course_id) if module else None
+            if section is None or module is None or course is None:
+                raise NotFoundError("collect task course hierarchy not found")
+            if not self._is_global_reviewer(actor) and not await uow.course_instructors.is_assigned(actor.id, course.id):
+                raise AuthorizationError("instructor is not assigned to this course")
+
             before = len(task.history)
             if action == "IN_REVIEW":
                 task.begin_review(actor.id)
@@ -212,13 +278,63 @@ class CollectTaskUseCases:
             else:
                 raise ValidationError("unsupported review action")
             await uow.learning_progress.save_task(task, task.history[before:])
-            section = await uow.sections.get_by_id(task.section_id)
-            module = await uow.modules.get_by_id(section.module_id) if section else None
-            if module is not None:
-                from app.application.use_cases.learner_progress import LearnerProgressUseCases
-                await LearnerProgressUseCases(lambda: uow).refresh_self_learning_completion(uow, task.learner_id, module.course_id)
+            from app.application.use_cases.learner_progress import LearnerProgressUseCases
+            await LearnerProgressUseCases(lambda: uow).refresh_self_learning_completion(uow, task.learner_id, module.course_id)
+
+            notification = None
+            if action in {"REVISION_REQUIRED", "REVIEWED", "PASSED"}:
+                labels = {
+                    "REVISION_REQUIRED": "Perlu revisi",
+                    "REVIEWED": "Review selesai",
+                    "PASSED": "Lulus",
+                }
+                details = [
+                    f"Course: {course.title}",
+                    f"Tugas: {section.title}",
+                    f"Hasil: {labels[action]}",
+                ]
+                if score is not None:
+                    details.append(f"Skor: {score}/100")
+                if note and note.strip():
+                    details.append(f"Catatan reviewer: {note.strip()}")
+                review_event = task.history[-1]
+                notification = ReviewNotification(
+                    idempotency_key=str(review_event.id),
+                    recipient_user_id=task.learner_id,
+                    title=f"Hasil review tugas lab: {labels[action]}",
+                    message="\n".join(details),
+                    event_type=f"lms.lab_task.review.{action.lower()}",
+                    action_url=(
+                        f"/courses/{quote(str(course.slug), safe='')}/watch/section/"
+                        f"{quote(str(section.slug), safe='')}"
+                    ),
+                    metadata={
+                        "task_id": str(task.id),
+                        "course_id": str(course.id),
+                        "course_slug": str(course.slug),
+                        "section_id": str(section.id),
+                        "section_slug": str(section.slug),
+                        "status": action,
+                        "score": score,
+                        "reviewer_id": actor.id,
+                    },
+                )
             await uow.commit()
+            if notification is not None and self.notification_publisher is not None:
+                try:
+                    await self.notification_publisher.publish(notification)
+                except Exception as error:
+                    logger.warning(
+                        "UserManagement review notification failed task_id=%s event=%s error=%s",
+                        task.id,
+                        action,
+                        type(error).__name__,
+                    )
             return task
+
+    @staticmethod
+    def _is_global_reviewer(actor: CurrentUser) -> bool:
+        return actor.is_superuser or actor.has_any_role(("admin",))
 
     @staticmethod
     def _require_admin(actor: CurrentUser) -> None:
@@ -230,8 +346,14 @@ class CollectTaskUseCases:
             result = await uow.learning_progress.get_file_for_task(file_id)
             if result is None:
                 raise NotFoundError("file not found")
-            metadata, owners = result
-            if not actor.is_superuser and actor.id not in owners and not actor.has_any_role(("admin", "instructor")):
+            metadata, owners, course_ids = result
+            permitted = actor.is_superuser or actor.id in owners or actor.has_any_role(("admin",))
+            if not permitted and actor.has_any_role(("instructor",)):
+                for course_id in course_ids:
+                    if await uow.course_instructors.is_assigned(actor.id, course_id):
+                        permitted = True
+                        break
+            if not permitted:
                 raise AuthorizationError("file access is not permitted")
             await uow.rollback()
             content = await file_storage.get(metadata.storage_backend, metadata.storage_key)

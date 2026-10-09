@@ -1,13 +1,19 @@
 from datetime import datetime
 from uuid import UUID
 
+from sqlalchemy import func, or_
 from sqlmodel import select
+
+from app.application.dto.collect_task_review import CollectTaskReviewEntry
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.domain.entities.collect_task import CollectTask, CollectTaskEvent, CollectTaskStatus
 from app.domain.entities.file import FileMetadata
 from app.domain.entities.section_completion import SectionCompletion
 from app.infrastructure.persistence.models.collect_task import CollectTask as TaskRow, CollectTaskHistory as HistoryRow, CollectTaskFile as TaskFileRow, Files as FileRow
+from app.infrastructure.persistence.models.course import Course as CourseRow
+from app.infrastructure.persistence.models.module import Module as ModuleRow
+from app.infrastructure.persistence.models.section import Section as SectionRow
 from app.infrastructure.persistence.models.section_completion import SectionCompletion as CompletionRow
 
 
@@ -130,6 +136,86 @@ class SqlModelLearningProgressRepository:
             query = query.where(TaskRow.status == status)
         return [await self._to_domain(row) for row in (await self.session.exec(query)).all()]
 
+    async def list_tasks_for_review(
+        self,
+        *,
+        statuses: list[str],
+        course_id: UUID | None,
+        learner_ids: list[str] | None,
+        learner_search: str | None,
+        course_scope_ids: list[UUID] | None,
+        offset: int,
+        limit: int,
+    ) -> tuple[list[CollectTaskReviewEntry], int]:
+        if course_scope_ids is not None and not course_scope_ids:
+            return [], 0
+        search = learner_search.strip() if learner_search else ""
+        if learner_ids is not None and not learner_ids and not search:
+            return [], 0
+
+        latest_submission = (
+            select(
+                HistoryRow.task_id.label("task_id"),
+                func.max(HistoryRow.created_at).label("latest_submission_at"),
+            )
+            .where(HistoryRow.action == "SUBMISSION")
+            .group_by(HistoryRow.task_id)
+            .subquery()
+        )
+        filters = [TaskRow.status.in_(statuses)]
+        if course_id is not None:
+            filters.append(CourseRow.id == course_id)
+        if course_scope_ids is not None:
+            filters.append(CourseRow.id.in_(course_scope_ids))
+        if search and learner_ids:
+            filters.append(or_(TaskRow.learner_id.in_(learner_ids), TaskRow.learner_id.ilike(f"%{search}%")))
+        elif search:
+            filters.append(TaskRow.learner_id.ilike(f"%{search}%"))
+        elif learner_ids is not None:
+            filters.append(TaskRow.learner_id.in_(learner_ids))
+
+        query = (
+            select(TaskRow, SectionRow, ModuleRow, CourseRow, latest_submission.c.latest_submission_at)
+            .join(SectionRow, SectionRow.id == TaskRow.section_id)
+            .join(ModuleRow, ModuleRow.id == SectionRow.module_id)
+            .join(CourseRow, CourseRow.id == ModuleRow.course_id)
+            .join(latest_submission, latest_submission.c.task_id == TaskRow.id)
+            .where(*filters)
+        )
+        count_query = (
+            select(func.count(TaskRow.id))
+            .select_from(TaskRow)
+            .join(SectionRow, SectionRow.id == TaskRow.section_id)
+            .join(ModuleRow, ModuleRow.id == SectionRow.module_id)
+            .join(CourseRow, CourseRow.id == ModuleRow.course_id)
+            .join(latest_submission, latest_submission.c.task_id == TaskRow.id)
+            .where(*filters)
+        )
+        total = int((await self.session.exec(count_query)).one())
+        rows = (
+            await self.session.exec(
+                query.order_by(latest_submission.c.latest_submission_at, TaskRow.id)
+                .offset(offset)
+                .limit(limit)
+            )
+        ).all()
+        entries = []
+        for task_row, section_row, module_row, course_row, submitted_at in rows:
+            entries.append(
+                CollectTaskReviewEntry(
+                    task=await self._to_domain(task_row),
+                    course_id=course_row.id,
+                    course_slug=course_row.slug,
+                    course_title=course_row.title,
+                    module_slug=module_row.slug,
+                    module_title=module_row.title,
+                    section_slug=section_row.slug,
+                    section_title=section_row.title,
+                    latest_submission_at=submitted_at,
+                )
+            )
+        return entries, total
+
     async def _to_domain(self, row: TaskRow) -> CollectTask:
         history_rows = (await self.session.exec(select(HistoryRow).where(HistoryRow.task_id == row.id).order_by(HistoryRow.created_at, HistoryRow.id))).all()
         links = (await self.session.exec(select(TaskFileRow, FileRow).join(FileRow, FileRow.id == TaskFileRow.file_id).where(TaskFileRow.task_id == row.id))).all()
@@ -139,10 +225,24 @@ class SqlModelLearningProgressRepository:
         events = [CollectTaskEvent(task_id=item.task_id, id=item.id, actor_id=item.actor_id, action=item.action, status=CollectTaskStatus(item.status), created_at=item.created_at, submission_text=item.submission_text, evidence_urls=tuple(item.evidence_urls or ()), files=tuple(files_by_history.get(item.id, ())), score=item.score, review_note=item.review_note) for item in history_rows]
         return CollectTask(learner_id=row.learner_id, section_id=row.section_id, id=row.id, status=CollectTaskStatus(row.status), score=row.score, review_note=row.review_note, created_at=row.created_at, updated_at=row.updated_at, history=events)
 
-    async def get_file_for_task(self, file_id: UUID) -> tuple[FileMetadata, set[str]] | None:
-        query = select(FileRow, TaskRow.learner_id).join(TaskFileRow, TaskFileRow.file_id == FileRow.id).join(TaskRow, TaskRow.id == TaskFileRow.task_id).where(FileRow.id == file_id)
+    async def get_file_for_task(self, file_id: UUID) -> tuple[FileMetadata, set[str], set[UUID]] | None:
+        query = (
+            select(FileRow, TaskRow.learner_id, CourseRow.id)
+            .join(TaskFileRow, TaskFileRow.file_id == FileRow.id)
+            .join(TaskRow, TaskRow.id == TaskFileRow.task_id)
+            .join(SectionRow, SectionRow.id == TaskRow.section_id)
+            .join(ModuleRow, ModuleRow.id == SectionRow.module_id)
+            .join(CourseRow, CourseRow.id == ModuleRow.course_id)
+            .where(FileRow.id == file_id)
+        )
         rows = (await self.session.exec(query)).all()
-        return (_file_metadata(rows[0][0]), {row[1] for row in rows}) if rows else None
+        if not rows:
+            return None
+        return (
+            _file_metadata(rows[0][0]),
+            {row[1] for row in rows},
+            {row[2] for row in rows},
+        )
 
 
 def _file_metadata(row: FileRow) -> FileMetadata:

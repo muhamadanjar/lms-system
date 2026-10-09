@@ -6,15 +6,29 @@ from fastapi.responses import Response
 
 from app.application.dto.task_file_upload import MAX_TASK_FILES_PER_SUBMISSION, MAX_TASK_FILE_BYTES, MAX_TASK_SUBMISSION_BYTES, TaskFileUpload
 from app.application.ports.auth import CurrentUser
+from app.application.ports.notification_publisher import NotificationPublisherPort
 from app.application.use_cases.collect_tasks import CollectTaskUseCases
 from app.domain.entities.collect_task import CollectTaskStatus
 from app.domain.exceptions import ValidationError
 from app.infrastructure.database.dependencies import get_uow
+from app.infrastructure.notifications.dependencies import (
+    get_user_management_notification_publisher,
+)
 from app.infrastructure.persistence.unit_of_work import SqlModelUnitOfWork
 from app.infrastructure.storage.dependencies import get_file_storage
 from app.infrastructure.storage.file_storage import ConfiguredFileStorage
 from app.presentation.dependencies.auth import get_current_user, require_content_editor
-from app.presentation.schemas.collect_tasks import CollectTaskFileUploadRead, CollectTaskRead, CollectTaskReviewRequest, CollectTaskSubmissionRequest, collect_task_file_upload_read, collect_task_read
+from app.presentation.schemas.collect_tasks import (
+    CollectTaskFileUploadRead,
+    CollectTaskRead,
+    CollectTaskReviewCourseRead,
+    CollectTaskReviewItemRead,
+    CollectTaskReviewRequest,
+    CollectTaskSubmissionRequest,
+    collect_task_file_upload_read,
+    collect_task_read,
+    collect_task_review_read,
+)
 from app.presentation.schemas.content import ApiResponse
 
 router = APIRouter(tags=["Legacy Compatibility"])
@@ -134,15 +148,68 @@ async def get_my_collect_task(course_slug: str, module_slug: str, section_slug: 
     return ApiResponse(data=collect_task_read(task) if task else None, meta={})
 
 
-@admin_router.get("/api/admin/collect-tasks", response_model=ApiResponse[list[CollectTaskRead]])
-async def list_collect_tasks_for_review(status: CollectTaskStatus | None = Query(default=None), user: CurrentUser = Depends(get_current_user), uow: SqlModelUnitOfWork = Depends(get_uow)):
-    tasks = await CollectTaskUseCases(lambda: uow).list_for_review(user, status)
-    return ApiResponse(data=[collect_task_read(task) for task in tasks], meta={})
+@admin_router.get("/api/admin/collect-tasks/review-courses", response_model=ApiResponse[list[CollectTaskReviewCourseRead]])
+async def list_collect_task_review_courses(
+    user: CurrentUser = Depends(get_current_user),
+    uow: SqlModelUnitOfWork = Depends(get_uow),
+):
+    courses = await CollectTaskUseCases(lambda: uow).list_review_courses(user)
+    return ApiResponse(
+        data=[
+            CollectTaskReviewCourseRead(id=course.id, slug=str(course.slug), title=course.title)
+            for course in courses
+        ],
+        meta={},
+    )
+
+
+@admin_router.get("/api/admin/collect-tasks", response_model=ApiResponse[list[CollectTaskReviewItemRead]])
+async def list_collect_tasks_for_review(
+    status: list[CollectTaskStatus] | None = Query(default=None),
+    course_id: UUID | None = Query(default=None),
+    learner_id: list[str] | None = Query(default=None),
+    learner_search: str | None = Query(default=None, max_length=255),
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=20, ge=1, le=100),
+    user: CurrentUser = Depends(get_current_user),
+    uow: SqlModelUnitOfWork = Depends(get_uow),
+):
+    result = await CollectTaskUseCases(lambda: uow).list_for_review(
+        user,
+        status,
+        course_id=course_id,
+        learner_ids=learner_id,
+        learner_search=learner_search,
+        page=page,
+        per_page=per_page,
+    )
+    return ApiResponse(
+        data=[collect_task_review_read(item) for item in result.items],
+        meta={
+            "pagination": {
+                "page": result.page,
+                "per_page": result.per_page,
+                "total": result.total,
+                "total_pages": max(1, (result.total + result.per_page - 1) // result.per_page),
+            }
+        },
+    )
 
 
 @admin_router.post("/api/admin/collect-tasks/{task_id}/review", response_model=ApiResponse[CollectTaskRead])
-async def review_collect_task(task_id: UUID, payload: CollectTaskReviewRequest, user: CurrentUser = Depends(get_current_user), uow: SqlModelUnitOfWork = Depends(get_uow)):
-    task = await CollectTaskUseCases(lambda: uow).review(user, task_id, payload.action, score=payload.score, note=payload.note)
+async def review_collect_task(
+    task_id: UUID,
+    payload: CollectTaskReviewRequest,
+    user: CurrentUser = Depends(get_current_user),
+    uow: SqlModelUnitOfWork = Depends(get_uow),
+    notification_publisher: NotificationPublisherPort = Depends(
+        get_user_management_notification_publisher
+    ),
+):
+    task = await CollectTaskUseCases(
+        lambda: uow,
+        notification_publisher=notification_publisher,
+    ).review(user, task_id, payload.action, score=payload.score, note=payload.note)
     return ApiResponse(data=collect_task_read(task), meta={})
 
 

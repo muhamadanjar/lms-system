@@ -15,6 +15,7 @@ from app.domain.value_objects.content import ContentStatus, SectionContentType
 from app.domain.value_objects.learning_policy import CompletionMode, ProgressionMode
 from app.domain.value_objects.content import QuestionType
 from app.infrastructure.database.dependencies import get_uow
+from app.infrastructure.notifications.dependencies import get_user_management_notification_publisher
 from app.infrastructure.persistence.unit_of_work import SqlModelUnitOfWork
 from app.infrastructure.storage.dependencies import get_file_storage
 from app.infrastructure.storage.file_storage import ConfiguredFileStorage
@@ -259,8 +260,18 @@ async def test_collect_task_submission_review_and_self_learning_completion(sessi
     async def override_user():
         return actor["user"]
 
+    published_notifications = []
+
+    class FakeNotificationPublisher:
+        async def publish(self, notification):
+            published_notifications.append(notification)
+
+    async def override_notification_publisher():
+        return FakeNotificationPublisher()
+
     app.dependency_overrides[get_uow] = override_uow
     app.dependency_overrides[get_current_user] = override_user
+    app.dependency_overrides[get_user_management_notification_publisher] = override_notification_publisher
     try:
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post(
@@ -277,6 +288,9 @@ async def test_collect_task_submission_review_and_self_learning_completion(sessi
             assert reviewed.status_code == 200
             assert reviewed.json()["data"]["status"] == "REVIEWED"
             assert len(reviewed.json()["data"]["history"]) == 3
+            assert len(published_notifications) == 1
+            assert published_notifications[0].event_type == "lms.lab_task.review.reviewed"
+            assert published_notifications[0].idempotency_key
 
             actor["user"] = learner
             own = await client.get("/api/courses/lab-course/modules/lab-module/sections/lab/collect-task")

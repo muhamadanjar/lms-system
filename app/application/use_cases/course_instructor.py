@@ -19,3 +19,22 @@ class CourseInstructorUseCases:
             result = await uow.course_instructors.assign(instructor)
             await uow.commit()
             return result
+
+    async def list_for_course(self, course_slug: str) -> list[CourseInstructor]:
+        async with self.uow_factory() as uow:
+            course = await uow.courses.get_by_slug(course_slug)
+            if course is None:
+                raise NotFoundError("course not found")
+            result = await uow.course_instructors.list_for_course(course.id)
+            await uow.rollback()
+            return result
+
+    async def remove(self, course_slug: str, user_id: str) -> None:
+        async with self.uow_factory() as uow:
+            course = await uow.courses.get_by_slug(course_slug)
+            if course is None:
+                raise NotFoundError("course not found")
+            removed = await uow.course_instructors.remove(course.id, user_id)
+            if not removed:
+                raise NotFoundError("course instructor assignment not found")
+            await uow.commit()

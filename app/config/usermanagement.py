@@ -1,4 +1,4 @@
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,6 +14,30 @@ class UserManagementSettings(BaseSettings):
     timeout_seconds: float = Field(
         default=3.0,
         validation_alias=AliasChoices("usermanagement__timeout_seconds", "USERMANAGEMENT_TIMEOUT_SECONDS"),
+    )
+    notification_client_id: str = Field(
+        default="",
+        validation_alias=AliasChoices("usermanagement__notification_client_id", "USERMANAGEMENT_NOTIFICATION_CLIENT_ID"),
+    )
+    notification_client_secret: SecretStr = Field(
+        default=SecretStr(""),
+        validation_alias=AliasChoices("usermanagement__notification_client_secret", "USERMANAGEMENT_NOTIFICATION_CLIENT_SECRET"),
+    )
+    notification_audience: str = Field(
+        default="usermanagement-api",
+        validation_alias=AliasChoices("usermanagement__notification_audience", "USERMANAGEMENT_NOTIFICATION_AUDIENCE"),
+    )
+    notification_scope: str = Field(
+        default="notifications.publish",
+        validation_alias=AliasChoices("usermanagement__notification_scope", "USERMANAGEMENT_NOTIFICATION_SCOPE"),
+    )
+    oauth_token_path: str = Field(
+        default="/oauth/token",
+        validation_alias=AliasChoices("usermanagement__oauth_token_path", "USERMANAGEMENT_OAUTH_TOKEN_PATH"),
+    )
+    notification_publish_path: str = Field(
+        default="/internal/v1/notifications",
+        validation_alias=AliasChoices("usermanagement__notification_publish_path", "USERMANAGEMENT_NOTIFICATION_PUBLISH_PATH"),
     )
 
     model_config = SettingsConfigDict(

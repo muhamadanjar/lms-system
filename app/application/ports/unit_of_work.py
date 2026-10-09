@@ -8,6 +8,7 @@ class UnitOfWorkPort(ABC):
     sections: object
     lab_access: object
     enrollments: object
+    course_instructors: object
     slugs: object
     servers: object
     quizzes: object

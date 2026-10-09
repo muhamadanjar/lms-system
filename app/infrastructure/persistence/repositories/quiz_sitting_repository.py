@@ -131,7 +131,16 @@ class SqlModelQuizSittingRepository:
         results = [await self.get_final_result(row.id) for row in rows]
         return [result for result in results if result is not None]
 
-    async def reserve_exam_finalization(self, quiz_id: UUID, learner_id: str, max_attempts: int) -> None:
+    async def ensure_exam_attempt_available(self, quiz_id: UUID, learner_id: str, max_attempts: int) -> None:
+        counter = (await self.session.exec(
+            select(QuizExamAttemptCounter)
+            .where(QuizExamAttemptCounter.quiz_id == quiz_id, QuizExamAttemptCounter.learner_id == learner_id)
+            .with_for_update()
+        )).first()
+        if counter is not None and counter.finalized_attempts >= max_attempts:
+            raise ConflictError("EXAM_ATTEMPT_LIMIT_REACHED")
+
+    async def record_exam_finalization(self, quiz_id: UUID, learner_id: str) -> None:
         counter = (await self.session.exec(
             select(QuizExamAttemptCounter)
             .where(QuizExamAttemptCounter.quiz_id == quiz_id, QuizExamAttemptCounter.learner_id == learner_id)
@@ -141,8 +150,6 @@ class SqlModelQuizSittingRepository:
             counter = QuizExamAttemptCounter(quiz_id=quiz_id, learner_id=learner_id, finalized_attempts=0)
             self.session.add(counter)
             await self.session.flush()
-        if counter.finalized_attempts >= max_attempts:
-            raise ConflictError("EXAM_ATTEMPT_LIMIT_REACHED")
         counter.finalized_attempts += 1
         from app.infrastructure.persistence.models.base import utc_now
         counter.updated_at = utc_now()

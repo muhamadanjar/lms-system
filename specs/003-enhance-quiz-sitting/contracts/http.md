@@ -108,6 +108,6 @@ selections, or another learner's data.
 | 403 | `FORBIDDEN` | Authenticated caller lacks author/staff permission. |
 | 404 | `RESOURCE_NOT_FOUND` | Unknown resource or another learner's sitting. |
 | 409 | `QUESTION_CODE_CONFLICT` | Normalized global question-code collision. |
-| 409 | `EXAM_ATTEMPT_LIMIT_REACHED` | Finalization would exceed the exam maximum. |
+| 409 | `EXAM_ATTEMPT_LIMIT_REACHED` | Starting a new exam sitting would exceed the exam maximum. An already active sitting can still be finalized. |
 | 422 | `VALIDATION_ERROR` | Invalid question code, draft selection, unsupported direct question, or mutation of final content. |
 | 503 | `AUTHENTICATION_SERVICE_UNAVAILABLE` | Delegated identity service unavailable. |

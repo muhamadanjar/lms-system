@@ -12,10 +12,11 @@ from app.domain.entities.quiz import Quiz
 from app.domain.entities.section import Section
 from app.domain.exceptions import ConflictError
 from app.domain.value_objects.content import QuestionType, SectionContentType
+from app.infrastructure.persistence.models.quiz_exam_attempt_counter import QuizExamAttemptCounter
 from app.infrastructure.persistence.unit_of_work import SqlModelUnitOfWork
 
 
-async def test_exam_limit_applies_only_on_finalization(session):
+async def test_exam_limit_blocks_new_sitting_after_last_allowed_finalization(session):
     course = Course(slug="exam-course", title="Course")
     module = Module(slug="exam-module", course_id=course.id, title="Module")
     section = Section(slug="exam-section", module_id=module.id, title="Quiz", content_type=SectionContentType.QUIZ)
@@ -34,6 +35,30 @@ async def test_exam_limit_applies_only_on_finalization(session):
         await uow.rollback()
     await use_cases.save_selections(first.id, "learner", (AnswerSelectionInput("Q-EXAM", (option_id,)),))
     await use_cases.finalize(first.id, "learner")
-    second, _ = await use_cases.start_or_resume(quiz.id, "learner")
     with pytest.raises(ConflictError, match="EXAM_ATTEMPT_LIMIT_REACHED"):
-        await use_cases.finalize(second.id, "learner")
+        await use_cases.start_or_resume(quiz.id, "learner")
+
+
+async def test_active_exam_sitting_can_finalize_when_limit_is_reached(session):
+    course = Course(slug="active-exam-course", title="Course")
+    module = Module(slug="active-exam-module", course_id=course.id, title="Module")
+    section = Section(slug="active-exam-section", module_id=module.id, title="Quiz", content_type=SectionContentType.QUIZ)
+    quiz = Quiz(slug="active-exam-quiz", section_id=section.id, is_exam=True, max_attempts=1)
+    question = Question(slug="active-exam-question", quiz_id=quiz.id, prompt="One?", question_type=QuestionType.MULTICHOICE, weight=Decimal("1"), question_code="q-active-exam")
+    answer = Answer(slug="active-exam-answer", question_id=question.id, value="One", is_correct=True, question_type=QuestionType.MULTICHOICE)
+    wrong_answer = Answer(slug="active-exam-wrong-answer", question_id=question.id, value="Two", position=1, is_correct=False, question_type=QuestionType.MULTICHOICE)
+    async with SqlModelUnitOfWork(session=session) as uow:
+        await uow.courses.create(course); await uow.modules.create(module); await uow.sections.create(section)
+        await uow.quizzes.create_quiz(quiz); await uow.quizzes.create_question(question); await uow.quizzes.create_answer(answer); await uow.quizzes.create_answer(wrong_answer); await uow.commit()
+
+    use_cases = QuizSittingUseCases(SqlModelUnitOfWork(session=session))
+    active, _ = await use_cases.start_or_resume(quiz.id, "learner")
+    session.add(QuizExamAttemptCounter(quiz_id=quiz.id, learner_id="learner", finalized_attempts=1))
+    await session.commit()
+
+    result = await use_cases.finalize(active.id, "learner")
+
+    assert result.id == active.id
+    async with SqlModelUnitOfWork(session=session) as uow:
+        counter = await uow.session.get(QuizExamAttemptCounter, (quiz.id, "learner"))
+        assert counter.finalized_attempts == 2

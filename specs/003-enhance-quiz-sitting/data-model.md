@@ -109,8 +109,9 @@ are immutable after state becomes `GRADED`.
 | `finalized_attempts` | Non-negative integer | Incremented only while finalizing an exam sitting. |
 | `updated_at` | UTC datetime | Lock/audit timestamp. |
 
-The application locks this record in the same transaction as finalization, rejects a count at
-the configured maximum, and increments only after the result can be committed. Non-exam
+The application checks this record under a row lock before creating a new exam sitting and
+rejects a count at the configured maximum. An already active sitting can still be finalized;
+finalization increments the counter in the same transaction as its immutable result. Non-exam
 sittings neither read nor write it.
 
 ## Aggregate and State Rules

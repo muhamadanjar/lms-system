@@ -40,6 +40,8 @@ class QuizSittingUseCases:
             active = await uow.sittings.get_active(quiz_id, learner_id)
             if active is not None:
                 return await self._draft_dto(uow, active), False
+            if quiz.is_exam:
+                await uow.sittings.ensure_exam_attempt_available(quiz.id, learner_id, quiz.max_attempts)
             questions = await uow.quizzes.list_questions(quiz_id)
             if any(question.question_type is not QuestionType.MULTICHOICE for question in questions):
                 raise ValidationError("DIRECT questions are not supported for quiz sittings")
@@ -87,6 +89,8 @@ class QuizSittingUseCases:
             active = await uow.sittings.get_active(quiz.id, learner_id)
             if active is not None:
                 return await self._draft_dto(uow, active), False
+            if quiz.is_exam:
+                await uow.sittings.ensure_exam_attempt_available(quiz.id, learner_id, quiz.max_attempts)
             questions = await uow.quizzes.list_questions(quiz.id)
             if not questions or any(question.question_type is not QuestionType.MULTICHOICE for question in questions):
                 raise ValidationError("quiz sittings require at least one MULTICHOICE-only question")
@@ -153,7 +157,7 @@ class QuizSittingUseCases:
                 finalized_at=finalized_at,
             )
             if quiz.is_exam:
-                await uow.sittings.reserve_exam_finalization(quiz.id, learner_id, quiz.max_attempts)
+                await uow.sittings.record_exam_finalization(quiz.id, learner_id)
             sitting.finalize(result.total_score)
             await uow.sittings.save_final_result(sitting, result)
             if quiz.section_id is not None and getattr(uow, "sections", None) is not None:
