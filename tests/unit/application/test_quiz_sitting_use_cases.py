@@ -17,7 +17,8 @@ def use_case():
     quiz = Quiz(section_id=uuid4(), slug="quiz")
     question = Question(quiz_id=quiz.id, slug="question", prompt="One?", question_type=QuestionType.MULTICHOICE, weight=Decimal("1"), question_code="q-1")
     answer = Answer(question_id=question.id, slug="answer", value="One", is_correct=True, question_type=QuestionType.MULTICHOICE)
-    uow = FakeQuizSittingUnitOfWork(FakeQuizRepository(quiz, [question], {question.id: [answer]}), FakeSittingRepository())
+    wrong_answer = Answer(question_id=question.id, slug="wrong-answer", value="Two", position=1, is_correct=False, question_type=QuestionType.MULTICHOICE)
+    uow = FakeQuizSittingUnitOfWork(FakeQuizRepository(quiz, [question], {question.id: [answer, wrong_answer]}), FakeSittingRepository())
     return QuizSittingUseCases(uow), uow
 
 

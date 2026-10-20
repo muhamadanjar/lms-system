@@ -1,9 +1,13 @@
+import logging
+
 from fastapi import HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 
 from app.domain.exceptions import AuthorizationError, ConflictError, DomainError, NotFoundError
+
+logger = logging.getLogger(__name__)
 
 
 def _error(request: Request, code: str, message: str, status_code: int) -> JSONResponse:
@@ -13,7 +17,7 @@ def _error(request: Request, code: str, message: str, status_code: int) -> JSONR
             "error": {
                 "code": code,
                 "message": message,
-                "request_id": request.headers.get("X-Request-ID"),
+                "request_id": getattr(request.state, "request_id", None) or request.headers.get("X-Request-ID"),
             }
         },
     )
@@ -37,7 +41,18 @@ async def handle_domain_error(request: Request, exc: DomainError) -> JSONRespons
     return _error(request, "VALIDATION_ERROR", str(exc), 422)
 
 
-async def handle_integrity_error(request: Request, _exc: IntegrityError) -> JSONResponse:
+async def handle_integrity_error(request: Request, exc: IntegrityError) -> JSONResponse:
+    original = exc.orig
+    diagnostic = getattr(original, "diag", None)
+    constraint_name = getattr(diagnostic, "constraint_name", None)
+    sqlstate = getattr(original, "sqlstate", None) or getattr(original, "pgcode", None)
+    request_id = getattr(request.state, "request_id", None)
+    logger.error(
+        "Database integrity conflict request_id=%s constraint=%s sqlstate=%s",
+        request_id,
+        constraint_name,
+        sqlstate,
+    )
     return _error(request, "RESOURCE_CONFLICT", "The requested change conflicts with existing data", 409)
 
 

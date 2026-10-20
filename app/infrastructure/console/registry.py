@@ -35,9 +35,13 @@ class InMemoryConsoleRegistry:
         with self._lock:
             return self._slots.get(server_id)
 
-    def release(self, server_id: UUID) -> None:
+    def release(self, server_id: UUID, session_id: str) -> bool:
         with self._lock:
-            self._slots.pop(server_id, None)
+            slot = self._slots.get(server_id)
+            if slot is None or slot.session_id != session_id:
+                return False
+            del self._slots[server_id]
+            return True
 
     def release_all(self) -> None:
         with self._lock:

@@ -40,10 +40,37 @@ class QuizSittingDraftDTO:
 
 
 @dataclass(frozen=True)
+class QuizSittingOptionDTO:
+    id: UUID
+    value: str
+    position: int
+
+
+@dataclass(frozen=True)
+class QuizSittingQuestionDTO:
+    question_code: str
+    prompt: str
+    answer_policy: str
+    position: int
+    options: tuple[QuizSittingOptionDTO, ...]
+    selected_option_ids: tuple[UUID, ...]
+
+
+@dataclass(frozen=True)
+class QuizSittingContentDTO:
+    id: UUID
+    quiz_id: UUID
+    attempt_state: str
+    questions: tuple[QuizSittingQuestionDTO, ...]
+
+
+@dataclass(frozen=True)
 class QuizResultSummaryDTO:
     quiz_id: UUID
     is_exam: bool
     best_score: int | None
+    best_percentage: float | None
+    is_passed: bool | None
     finalized_attempts: int
     max_attempts: int | None
     result: QuizSittingResultDTO | None

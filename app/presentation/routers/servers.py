@@ -16,14 +16,14 @@ from app.presentation.schemas.server import (
 )
 from fastapi.exceptions import HTTPException
 
-router = APIRouter(prefix="/api/v1/servers", tags=["Servers"])
+admin_router = APIRouter(prefix="/api/admin/servers", tags=["Admin Servers"])
 
 
 def use_cases(uow: SqlModelUnitOfWork) -> ServerInventoryUseCase:
     return ServerInventoryUseCase(lambda: uow)
 
 
-@router.get("", response_model=ApiResponse[list[ServerRead]])
+@admin_router.get("", response_model=ApiResponse[list[ServerRead]])
 async def list_servers(
     query: PaginationQuery = Depends(),
     _user: CurrentUser = Depends(require_permission("servers.view")),
@@ -36,7 +36,7 @@ async def list_servers(
     )
 
 
-@router.post("", response_model=ApiResponse[ServerRead], status_code=status.HTTP_201_CREATED)
+@admin_router.post("", response_model=ApiResponse[ServerRead], status_code=status.HTTP_201_CREATED)
 async def create_server(
     payload: ServerCreate,
     _user: CurrentUser = Depends(require_permission("servers.create")),
@@ -54,7 +54,7 @@ async def create_server(
     return ApiResponse(data=server_read(server), meta={"resource": "server"})
 
 
-@router.get("/{server_id}", response_model=ApiResponse[ServerRead])
+@admin_router.get("/{server_id}", response_model=ApiResponse[ServerRead])
 async def get_server(
     server_id: UUID,
     _user: CurrentUser = Depends(require_permission("servers.view")),
@@ -64,7 +64,7 @@ async def get_server(
     return ApiResponse(data=server_read(server), meta={"resource": "server"})
 
 
-@router.patch("/{server_id}", response_model=ApiResponse[ServerRead])
+@admin_router.patch("/{server_id}", response_model=ApiResponse[ServerRead])
 async def update_server(
     server_id: UUID,
     payload: ServerUpdate,
@@ -87,7 +87,7 @@ async def update_server(
     return ApiResponse(data=server_read(server), meta={"resource": "server"})
 
 
-@router.delete("/{server_id}", status_code=status.HTTP_204_NO_CONTENT)
+@admin_router.delete("/{server_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_server(
     server_id: UUID,
     _user: CurrentUser = Depends(require_permission("servers.delete")),

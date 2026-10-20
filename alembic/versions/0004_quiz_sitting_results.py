@@ -22,10 +22,15 @@ def upgrade() -> None:
     op.add_column("quizzes", sa.Column("answer_policy", sa.String(length=12), nullable=False, server_default="SINGLE"))
     op.add_column("questions", sa.Column("question_code", sa.String(length=80), nullable=True))
 
-    connection = op.get_bind()
-    legacy_questions = connection.execute(sa.text("SELECT id FROM questions ORDER BY created_at, id")).all()
-    for number, row in enumerate(legacy_questions, start=1):
-        connection.execute(sa.text("UPDATE questions SET question_code = :code WHERE id = :id"), {"code": f"Q-{number:06d}", "id": row.id})
+    op.execute(
+        "WITH ranked_questions AS ("
+        " SELECT id, row_number() OVER (ORDER BY created_at, id) AS number"
+        " FROM questions"
+        ") UPDATE questions AS question"
+        " SET question_code = 'Q-' || lpad(ranked_questions.number::text,"
+        " greatest(6, length(ranked_questions.number::text)), '0')"
+        " FROM ranked_questions WHERE question.id = ranked_questions.id"
+    )
     op.alter_column("questions", "question_code", nullable=False)
     op.create_unique_constraint("uq_questions_question_code", "questions", ["question_code"])
     op.create_index("ix_questions_question_code", "questions", ["question_code"], unique=True)
@@ -37,11 +42,14 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint("name", name="pk_question_code_sequences"),
     )
-    connection.execute(sa.text("INSERT INTO question_code_sequences (name, next_value, updated_at) VALUES ('question_code', :next_value, CURRENT_TIMESTAMP)"), {"next_value": len(legacy_questions) + 1})
+    op.execute(
+        "INSERT INTO question_code_sequences (name, next_value, updated_at)"
+        " SELECT 'question_code', count(*) + 1, CURRENT_TIMESTAMP FROM questions"
+    )
 
     op.add_column("quiz_sittings", sa.Column("active_sitting_key", sa.String(length=600), nullable=True))
     op.add_column("quiz_sittings", sa.Column("total_score", sa.Integer(), nullable=True))
-    connection.execute(sa.text("UPDATE quiz_sittings SET active_sitting_key = CAST(quiz_id AS VARCHAR) || ':' || learner_id WHERE attempt_state = 'IN_PROGRESS'"))
+    op.execute("UPDATE quiz_sittings SET active_sitting_key = CAST(quiz_id AS VARCHAR) || ':' || learner_id WHERE attempt_state = 'IN_PROGRESS'")
     op.create_index("uq_quiz_sittings_active_key", "quiz_sittings", ["active_sitting_key"], unique=True)
 
     op.create_table(

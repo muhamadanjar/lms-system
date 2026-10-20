@@ -37,9 +37,12 @@ class FakeSittingRepository:
     async def save_final_result(self, sitting, result): self.results.setdefault(sitting.id, result)
     async def get_final_result(self, sitting_id): return self.results.get(sitting_id)
     async def list_final_results(self, quiz_id, learner_id): return [result for result in self.results.values() if result.quiz_id == quiz_id]
-    async def reserve_exam_finalization(self, quiz_id, learner_id, max_attempts):
+    async def ensure_exam_attempt_available(self, quiz_id, learner_id, max_attempts):
         key = (quiz_id, learner_id)
         if self.exam_counts[key] >= max_attempts: raise ConflictError("EXAM_ATTEMPT_LIMIT_REACHED")
+
+    async def record_exam_finalization(self, quiz_id, learner_id):
+        key = (quiz_id, learner_id)
         self.exam_counts[key] += 1
 
 

@@ -13,4 +13,5 @@ def to_enrollment(row: EnrollmentRow) -> Enrollment:
         status=row.status,
         enrolled_at=utc(row.enrolled_at),
         completed_at=utc(row.completed_at) if row.completed_at else None,
+        last_opened_section_id=row.last_opened_section_id,
     )

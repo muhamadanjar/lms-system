@@ -12,7 +12,7 @@ from app.infrastructure.persistence.models.quiz_sitting import QuizSitting as Si
 
 
 def to_quiz(row: QuizRow) -> Quiz:
-    return Quiz(id=row.id, slug=Slug(row.slug), status=ContentStatus(row.status), created_at=utc(row.created_at), updated_at=utc(row.updated_at), section_id=row.section_id, is_exam=row.is_exam, max_attempts=row.max_attempts, answer_policy=AnswerPolicy(row.answer_policy))
+    return Quiz(id=row.id, slug=Slug(row.slug), status=ContentStatus(row.status), created_at=utc(row.created_at), updated_at=utc(row.updated_at), course_id=row.course_id, section_id=row.section_id, title=row.title, description=row.description, is_exam=row.is_exam, max_attempts=row.max_attempts, passing_score=row.passing_score, answer_policy=AnswerPolicy(row.answer_policy))
 
 
 def to_question(row: QuestionRow) -> Question:

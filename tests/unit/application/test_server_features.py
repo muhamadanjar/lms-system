@@ -234,6 +234,22 @@ class TestServerConsole:
         assert isinstance(taken, ConsoleAccepted)
         assert taken.session_id == "s3"
 
+    async def test_rejected_conflict_cleanup_preserves_incumbent_slot(self):
+        cipher = make_cipher()
+        store = InMemoryServers(cipher)
+        registry = FakeRegistry()
+        uc, _ = console_uc(store, cipher, registry=registry)
+        srv = await uc_inventory_create(store, cipher)
+        first = await uc.open(srv.id, TermSize(80, 24), session_id="incumbent")
+        rejected = await uc.open(srv.id, TermSize(80, 24), session_id="rejected")
+        assert isinstance(first, ConsoleAccepted)
+        assert isinstance(rejected, ConsoleConflict)
+
+        await uc.close(srv.id, "rejected")
+        assert registry.active(srv.id).session_id == "incumbent"
+        await uc.close(srv.id, "incumbent")
+        assert registry.active(srv.id) is None
+
     async def test_takeover_closes_previous_session(self):
         cipher = make_cipher()
         store = InMemoryServers(cipher)

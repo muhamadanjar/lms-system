@@ -22,7 +22,8 @@ async def test_learner_quiz_sitting_contract_never_leaks_answer_key(session):
     section = Section(slug="http-quiz-section", module_id=module.id, title="Quiz", content_type=SectionContentType.QUIZ)
     quiz = Quiz(slug="http-quiz", section_id=section.id)
     question = Question(slug="http-question", quiz_id=quiz.id, prompt="One?", question_type=QuestionType.MULTICHOICE, weight=Decimal("1"), question_code="q-http-1")
-    answer = Answer(slug="http-answer", question_id=question.id, value="One", is_correct=True, question_type=QuestionType.MULTICHOICE)
+    answer = Answer(slug="http-answer", question_id=question.id, value="One", is_correct=True, question_type=QuestionType.MULTICHOICE, position=0)
+    distractor = Answer(slug="http-distractor", question_id=question.id, value="Two", is_correct=False, question_type=QuestionType.MULTICHOICE, position=1)
     async with SqlModelUnitOfWork(session=session) as uow:
         await uow.courses.create(course)
         await uow.modules.create(module)
@@ -30,6 +31,7 @@ async def test_learner_quiz_sitting_contract_never_leaks_answer_key(session):
         await uow.quizzes.create_quiz(quiz)
         await uow.quizzes.create_question(question)
         await uow.quizzes.create_answer(answer)
+        await uow.quizzes.create_answer(distractor)
         await uow.commit()
 
     async def override_uow():
@@ -42,7 +44,7 @@ async def test_learner_quiz_sitting_contract_never_leaks_answer_key(session):
     app.dependency_overrides[get_current_user] = override_user
     try:
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-            started = await client.post("/api/courses/http-quiz-course/modules/http-quiz-module/sections/http-quiz-section/quiz/sittings")
+            started = await client.post("/api/learner/courses/http-quiz-course/modules/http-quiz-module/sections/http-quiz-section/quiz/sittings")
             assert started.status_code == 201
             sitting = started.json()["data"]
             assert sitting["available_question_codes"] == ["Q-HTTP-1"]
@@ -50,15 +52,15 @@ async def test_learner_quiz_sitting_contract_never_leaks_answer_key(session):
             async with SqlModelUnitOfWork(session=session) as uow:
                 snapshot = await uow.sittings.get_snapshot(__import__("uuid").UUID(sitting["id"]))
                 await uow.rollback()
-            saved = await client.put(f"/api/quiz-sittings/{sitting['id']}/answers", json={"answers": [{"question_code": "Q-HTTP-1", "option_ids": [str(snapshot[0].options[0].id)]}]})
+            saved = await client.put(f"/api/learner/quiz-sittings/{sitting['id']}/answers", json={"answers": [{"question_code": "Q-HTTP-1", "option_ids": [str(snapshot[0].options[0].id)]}]})
             assert saved.status_code == 200
-            finalized = await client.post(f"/api/quiz-sittings/{sitting['id']}/finalize")
+            finalized = await client.post(f"/api/learner/quiz-sittings/{sitting['id']}/finalize")
             assert finalized.status_code == 200
             body = finalized.json()["data"]
             assert body["question_answer"] == ["Q-HTTP-1"]
             assert body["total_score"] == 1
             assert "is_correct" not in str(body)
-            mutation_after_final = await client.put(f"/api/quiz-sittings/{sitting['id']}/answers", json={"answers": []})
+            mutation_after_final = await client.put(f"/api/learner/quiz-sittings/{sitting['id']}/answers", json={"answers": []})
             assert mutation_after_final.status_code == 422
             assert mutation_after_final.json()["error"]["code"] == "VALIDATION_ERROR"
     finally:

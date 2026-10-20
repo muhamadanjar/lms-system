@@ -5,7 +5,7 @@ from uuid import UUID
 
 from app.domain.entities.base import ContentEntity
 from app.domain.exceptions import ValidationError
-from app.domain.value_objects.content import QuestionType, ensure_position, ensure_positive_weight, ensure_text
+from app.domain.value_objects.content import QuestionType, ensure_position, ensure_positive_weight
 from app.domain.value_objects.quiz_assessment import QuestionCode
 
 if TYPE_CHECKING:
@@ -26,7 +26,9 @@ class Question(ContentEntity):
         super().__post_init__()
         if self.quiz_id is None:
             raise ValidationError("quiz_id is required")
-        self.prompt = ensure_text(self.prompt, "prompt", 5000)
+        if not isinstance(self.prompt, str) or len(self.prompt) > 5000:
+            raise ValidationError("prompt must be a string of at most 5000 characters")
+        self.prompt = self.prompt.strip()
         self.question_type = QuestionType(self.question_type)
         self.weight = Decimal(str(ensure_positive_weight(self.weight)))
         self.position = ensure_position(self.position)

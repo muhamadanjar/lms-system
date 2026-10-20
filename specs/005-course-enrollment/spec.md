@@ -102,3 +102,8 @@ As an admin/teacher, I can mark a participant COMPLETED or WITHDRAWN so that lea
 - Learner identity reuses the existing opaque user_id from User Management; no local users table.
 - No roles/progress/grades in this slice; only completion date is stored beyond the requested columns.
 - Lab VPS provisioning rules from 004-course-lab-access are unchanged except for the added gate.
+
+
+## Admin enrollment management listing
+
+Course editors can list enrollment episodes across all Courses through `GET /api/enrollments`. The endpoint supports server-side pagination, search over participant ID, enrollment ID, Course title/slug, and status, optional Course and lifecycle-status filters, and inclusive enrollment timestamp bounds. It returns Course title and slug alongside each existing enrollment record. The Course scoped enrollment lifecycle and learner self-service routes remain unchanged.

@@ -38,6 +38,20 @@ class BulkEnrollResponse(BaseModel):
     failed: list[BulkFailedItem] = Field(default_factory=list)
 
 
+class AdminEnrollmentRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    user_id: str
+    course_id: UUID
+    course_slug: str
+    course_title: str
+    status: str
+    enrolled_at: datetime
+    completed_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
 class EnrollmentRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
@@ -48,3 +62,28 @@ class EnrollmentRead(BaseModel):
     completed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class LearnerCourseReferenceRead(BaseModel):
+    slug: str
+    title: str
+    description: str | None
+
+
+class LearnerEnrollmentSummaryRead(BaseModel):
+    status: str
+    enrolled_at: datetime
+    completed_at: datetime | None
+
+
+class LearnerCourseProgressRead(BaseModel):
+    completed_sections: int
+    total_sections: int
+    percentage: int = Field(ge=0, le=100)
+    course_state: str
+
+
+class LearnerCourseRead(BaseModel):
+    course: LearnerCourseReferenceRead
+    enrollment: LearnerEnrollmentSummaryRead
+    progress: LearnerCourseProgressRead

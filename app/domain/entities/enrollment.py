@@ -25,6 +25,7 @@ class Enrollment(BaseEntity):
     status: str = EnrollmentStatus.ENROLLED
     enrolled_at: datetime = field(default_factory=utc_now)
     completed_at: Optional[datetime] = None
+    last_opened_section_id: Optional[UUID] = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.user_id, str) or not self.user_id.strip():

@@ -26,11 +26,11 @@ def test_protected_routes_require_bearer_in_docs():
     assert scheme_names, "no securitySchemes defined"
 
     protected = [
-        ("get", "/api/courses"),
-        ("post", "/api/courses"),
-        ("get", "/api/courses/{course_slug}"),
-        ("get", "/api/v1/servers"),
-        ("post", "/api/v1/servers"),
+        ("get", "/api/admin/courses"),
+        ("post", "/api/admin/courses"),
+        ("get", "/api/admin/courses/{course_slug}"),
+        ("get", "/api/admin/servers"),
+        ("post", "/api/admin/servers"),
     ]
     for method, path in protected:
         operation = spec["paths"][path][method]
@@ -41,12 +41,12 @@ def test_protected_routes_require_bearer_in_docs():
 
 async def test_missing_token_returns_401_without_calling_auth_service():
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.get("/api/courses")
+        response = await client.get("/api/admin/courses")
         assert response.status_code == 401
         assert response.json()["error"]["message"] == "Bearer token is required"
 
 
 async def test_non_bearer_scheme_returns_401():
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.get("/api/courses", headers={"Authorization": "Basic dXNlcjpwYXNz"})
+        response = await client.get("/api/admin/courses", headers={"Authorization": "Basic dXNlcjpwYXNz"})
         assert response.status_code == 401

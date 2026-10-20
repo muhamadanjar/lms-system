@@ -8,7 +8,6 @@ lab_environment_settings are discarded and per-section lab_assignments
 are deduped to one ACTIVE row per (user, course).
 """
 from typing import Sequence, Union
-from uuid import uuid4
 
 from alembic import context, op
 import sqlalchemy as sa
@@ -69,53 +68,25 @@ def upgrade() -> None:
     op.drop_index("ix_lab_environment_settings_section_id", table_name="lab_environment_settings")
     op.drop_index("ix_lab_environment_settings_slug", table_name="lab_environment_settings")
     op.drop_table("lab_environment_settings")
-    bind.execute(sa.text("DELETE FROM content_slug_registry WHERE content_kind = 'lab_environment_settings'"))
-
-
-def _survivors(rows) -> dict[tuple[str, str], dict]:
-    """Satu pemenang per (user, course): ACTIVE > QUEUED, berserver, terbaru."""
-    best: dict[tuple[str, str], dict] = {}
-    for row in rows:
-        key = (row["user_id"], str(row["course_id"]))
-        active = 1 if row["state"] == "ACTIVE" else 0
-        has_server = 1 if row["server_id"] is not None else 0
-        candidate = (active, has_server, str(row["updated_at"]))
-        current = best.get(key)
-        if current is None or candidate > current["rank"]:
-            best[key] = {"rank": candidate, "row": row}
-    return best
+    op.execute("DELETE FROM content_slug_registry WHERE content_kind = 'lab_environment_settings'")
 
 
 def _backfill_course_access(bind) -> None:
-    rows = list(
-        bind.execute(
-            sa.text(
-                "SELECT a.user_id, a.server_id, a.state, a.created_at, a.updated_at,"
-                " m.course_id FROM lab_assignments a"
-                " JOIN sections s ON s.id = a.section_id"
-                " JOIN modules m ON m.id = s.module_id"
-                " WHERE a.state <> 'RELEASED'"
-            )
-        ).mappings()
+    del bind
+    op.execute(
+        "WITH ranked_assignments AS ("
+        " SELECT a.user_id, a.server_id, a.state, a.created_at, a.updated_at, m.course_id,"
+        " row_number() OVER (PARTITION BY a.user_id, m.course_id"
+        " ORDER BY (a.state = 'ACTIVE') DESC, (a.server_id IS NOT NULL) DESC, a.updated_at DESC) AS rank"
+        " FROM lab_assignments a"
+        " JOIN sections s ON s.id = a.section_id"
+        " JOIN modules m ON m.id = s.module_id"
+        " WHERE a.state <> 'RELEASED'"
+        ") INSERT INTO course_lab_access"
+        " (id, user_id, course_id, server_id, state, created_at, updated_at)"
+        " SELECT gen_random_uuid(), user_id, course_id, server_id, 'ACTIVE', created_at, updated_at"
+        " FROM ranked_assignments WHERE rank = 1 AND server_id IS NOT NULL"
     )
-    for (user_id, course_id), entry in _survivors(rows).items():
-        row = entry["row"]
-        if row["server_id"] is None:
-            continue
-        bind.execute(
-            sa.text(
-                "INSERT INTO course_lab_access (id, user_id, course_id, server_id, state, created_at, updated_at)"
-                " VALUES (:id, :user_id, :course_id, :server_id, 'ACTIVE', :created_at, :updated_at)"
-            ),
-            {
-                "id": str(uuid4()),
-                "user_id": user_id,
-                "course_id": course_id,
-                "server_id": str(row["server_id"]),
-                "created_at": row["created_at"],
-                "updated_at": row["updated_at"],
-            },
-        )
 
 
 def downgrade() -> None:

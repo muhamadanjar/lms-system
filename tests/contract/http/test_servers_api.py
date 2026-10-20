@@ -36,7 +36,7 @@ async def test_servers_crud_flow(session):
     try:
         async with client:
             response = await client.post(
-                "/api/v1/servers",
+                "/api/admin/servers",
                 json={
                     "name": "api-vps-01",
                     "host": "10.0.0.15",
@@ -51,18 +51,18 @@ async def test_servers_crud_flow(session):
             assert created["has_credential"] is True
             assert "credential" not in created and "password" not in json.dumps(created)
 
-            response = await client.get("/api/v1/servers")
+            response = await client.get("/api/admin/servers")
             assert response.status_code == 200
             body = response.json()
             assert body["data"][0]["name"] == "api-vps-01"
             assert body["meta"]["total"] == 1
 
-            response = await client.get(f"/api/v1/servers/{server_id}")
+            response = await client.get(f"/api/admin/servers/{server_id}")
             assert response.status_code == 200
             assert response.json()["data"]["host"] == "10.0.0.15"
 
             response = await client.patch(
-                f"/api/v1/servers/{server_id}",
+                f"/api/admin/servers/{server_id}",
                 json={"host": "10.0.0.16"},
             )
             assert response.status_code == 200
@@ -70,16 +70,16 @@ async def test_servers_crud_flow(session):
             assert response.json()["data"]["has_credential"] is True
 
             response = await client.patch(
-                f"/api/v1/servers/{server_id}",
+                f"/api/admin/servers/{server_id}",
                 json={"clear_credential": True},
             )
             assert response.status_code == 200
             assert response.json()["data"]["has_credential"] is False
 
-            response = await client.delete(f"/api/v1/servers/{server_id}")
+            response = await client.delete(f"/api/admin/servers/{server_id}")
             assert response.status_code == 204
 
-            response = await client.get(f"/api/v1/servers/{server_id}")
+            response = await client.get(f"/api/admin/servers/{server_id}")
             assert response.status_code == 404
             assert response.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
     finally:
@@ -91,7 +91,7 @@ async def test_servers_permission_denied(session):
     try:
         async with client:
             response = await client.post(
-                "/api/v1/servers",
+                "/api/admin/servers",
                 json={
                     "name": "denied",
                     "host": "10.0.0.1",
@@ -102,7 +102,7 @@ async def test_servers_permission_denied(session):
             assert response.status_code == 403
             assert response.json()["error"]["code"] == "FORBIDDEN"
 
-            response = await client.delete("/api/v1/servers/00000000-0000-0000-0000-000000000000")
+            response = await client.delete("/api/admin/servers/00000000-0000-0000-0000-000000000000")
             assert response.status_code == 403
     finally:
         app.dependency_overrides.clear()
@@ -114,7 +114,7 @@ async def test_servers_validation_conflicts(session):
     try:
         async with client:
             response = await client.post(
-                "/api/v1/servers",
+                "/api/admin/servers",
                 json={
                     "name": "dup",
                     "host": "10.0.0.1",
@@ -125,7 +125,7 @@ async def test_servers_validation_conflicts(session):
             assert response.status_code == 201
 
             response = await client.post(
-                "/api/v1/servers",
+                "/api/admin/servers",
                 json={
                     "name": "dup",
                     "host": "10.0.0.2",
@@ -137,7 +137,7 @@ async def test_servers_validation_conflicts(session):
             assert response.json()["error"]["code"] == "RESOURCE_CONFLICT"
 
             response = await client.post(
-                "/api/v1/servers",
+                "/api/admin/servers",
                 json={
                     "name": "bad-secret",
                     "host": "10.0.0.3",
@@ -148,7 +148,7 @@ async def test_servers_validation_conflicts(session):
             assert response.status_code == 422
 
             response = await client.patch(
-                "/api/v1/servers/00000000-0000-0000-0000-000000000000",
+                "/api/admin/servers/00000000-0000-0000-0000-000000000000",
                 json={"clear_credential": True, "credential": {"method": "PASSWORD", "password": "new"}},
             )
             assert response.status_code == 422

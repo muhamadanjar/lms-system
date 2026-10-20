@@ -20,6 +20,16 @@ def test_migration_chain_is_reversible_and_has_head():
         "0008_course_lab_access",
         "0009_course_enrollment",
         "0010_add_sequence_course",
+        "0011_course_quiz_lifecycle",
+        "0012_quiz_snapshot_fks",
+        "0013_question_type_length",
+        "0014_course_progress_tasks",
+        "0015_collect_task_files",
+        "0016_section_terminal_enabled",
+        "0017_section_is_preview",
+        "0018_course_watch_position",
+        "0019_collect_task_file_staging",
+        "0020_course_instructors",
     }
-    assert scripts.get_current_head() == "0010_add_sequence_course"
+    assert scripts.get_current_head() == "0020_course_instructors"
     assert all(re.fullmatch(r"\d{4}_[a-z0-9_]+", revision.revision) for revision in revisions)

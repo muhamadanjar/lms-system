@@ -32,7 +32,7 @@ async def test_author_can_create_normalized_or_generated_question_codes(session)
 
     app.dependency_overrides[get_uow] = override_uow
     app.dependency_overrides[get_current_user] = override_user
-    path = "/api/courses/code-course/modules/code-module/sections/code-section/quiz/questions"
+    path = "/api/admin/courses/code-course/modules/code-module/sections/code-section/quiz/questions"
     try:
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             manual = await client.post(path, json={"prompt": "Manual", "question_code": " q-manual-1 "})

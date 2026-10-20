@@ -5,7 +5,7 @@ import pytest
 
 from app.application.ports.ssh_bridge import HostKeyChanged, SshAuthFailed, TermSize
 from app.domain.value_objects.content import AccessMethod
-from app.infrastructure.ssh.asyncssh_bridge import AsyncSshBridge
+from app.infrastructure.ssh.asyncssh_bridge import AsyncSshBridge, _HostKeyClient
 
 
 class EchoSession(asyncssh.SSHServerSession):
@@ -57,6 +57,19 @@ class TestSSHServer(asyncssh.SSHServer):
 
 @pytest.mark.integration
 class TestAsyncSshBridge:
+    def test_untrusted_host_ca_rejected_with_or_without_host_key_pin(self):
+        ca_key = asyncssh.generate_private_key("ssh-ed25519")
+        pinned_key = asyncssh.generate_private_key("ssh-ed25519").export_public_key()
+
+        for expected_host_key in (None, pinned_key):
+            client = _HostKeyClient(expected_host_key)
+            assert not client.validate_host_ca_key(
+                host="server.example",
+                addr="192.0.2.10",
+                port=22,
+                key=ca_key,
+            )
+
     @pytest.fixture
     async def bridge_server(self):
         key = asyncssh.generate_private_key("ssh-ed25519")

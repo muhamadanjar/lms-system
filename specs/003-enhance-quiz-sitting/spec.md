@@ -75,7 +75,8 @@ attempt limit set by their author, defaulting to one finalized attempt.
 expectations, and the result history must respect both.
 
 **Independent Test**: Finalize multiple sittings for a practice quiz and an exam quiz with
-a finite attempt limit, then verify the permitted and rejected starts.
+a finite attempt limit, then verify permitted and rejected starts and that an active sitting
+can still be finalized after the limit is reached.
 
 **Acceptance Scenarios**:
 
@@ -85,7 +86,10 @@ a finite attempt limit, then verify the permitted and rejected starts.
    one sitting, **Then** the learner cannot start another sitting.
 3. **Given** an exam quiz with `max_attempts` set to 3, **When** a learner has finalized
    three sittings, **Then** the learner cannot start a fourth sitting.
-4. **Given** a non-exam quiz with multiple finalized sittings, **When** a learner's quiz
+4. **Given** an exam sitting was started while an attempt remained available, **When** the
+   finalized-attempt count reaches the maximum before that sitting is submitted, **Then** the
+   learner can still finalize the active sitting.
+5. **Given** a non-exam quiz with multiple finalized sittings, **When** a learner's quiz
    result is summarized for progress or completion, **Then** the highest total score is the
    canonical result while every finalized sitting remains available as history.
 
@@ -101,7 +105,7 @@ a finite attempt limit, then verify the permitted and rejected starts.
 - A finalization failure before the result is saved leaves the sitting unfinalized and
   retryable; no partial score is exposed as a final result.
 - A learner cannot use concurrent drafts to bypass an exam's configured finalized-attempt
-  limit.
+  limit; a sitting already active before the limit is reached remains submittable.
 - Correct-answer choices and other learners' answers are never exposed in a learner's
   sitting result.
 
@@ -173,8 +177,9 @@ a finite attempt limit, then verify the permitted and rejected starts.
   the original result without an extra sitting or changed score.
 - **SC-003**: A duplicate code, including a case- or whitespace-only duplicate, is rejected
   before it can become available in a quiz.
-- **SC-004**: 100% of attempts beyond an exam's configured finalized-attempt limit are
-  refused, while a learner can finalize at least two sittings for a non-exam quiz.
+- **SC-004**: New exam sittings are refused once the configured finalized-attempt limit is
+  reached, while active sittings remain finalizable and a learner can finalize at least two
+  sittings for a non-exam quiz.
 - **SC-005**: Learners can identify the outcome and score of every question in a finalized
   sitting without seeing answer keys or other learners' answers.
 

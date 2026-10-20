@@ -22,3 +22,6 @@ class EnrollmentRepository(ABC):
 
     @abstractmethod
     async def list_history(self, user_id: str, course_id: UUID) -> list[Enrollment]: ...
+
+    @abstractmethod
+    async def list_history_by_user(self, user_id: str) -> list[Enrollment]: ...

@@ -5,7 +5,9 @@ from sqlmodel import SQLModel
 from app.infrastructure.persistence.models.answer import Answer
 from app.infrastructure.persistence.models.content_slug_registry import ContentSlugRegistry
 from app.infrastructure.persistence.models.course import Course
+from app.infrastructure.persistence.models.course_instructor import CourseInstructor
 from app.infrastructure.persistence.models.course_lab_access import CourseLabAccess
+from app.infrastructure.persistence.models.collect_task import CollectTask, CollectTaskHistory, CollectTaskFile, Files
 from app.infrastructure.persistence.models.enrollment import Enrollment
 from app.infrastructure.persistence.models.module import Module
 from app.infrastructure.persistence.models.question import Question
@@ -19,12 +21,18 @@ from app.infrastructure.persistence.models.quiz_sitting_question import QuizSitt
 from app.infrastructure.persistence.models.quiz_sitting_question_result import QuizSittingQuestionResult
 from app.infrastructure.persistence.models.remote_server import RemoteServer
 from app.infrastructure.persistence.models.section import Section
+from app.infrastructure.persistence.models.section_completion import SectionCompletion
 
 __all__ = [
     "Answer",
     "ContentSlugRegistry",
     "Course",
+    "CourseInstructor",
     "CourseLabAccess",
+    "CollectTask",
+    "CollectTaskHistory",
+    "CollectTaskFile",
+    "Files",
     "Enrollment",
     "Module",
     "Question",
@@ -38,6 +46,7 @@ __all__ = [
     "QuizSittingQuestionResult",
     "RemoteServer",
     "Section",
+    "SectionCompletion",
     "SQLModel",
 ]
 
