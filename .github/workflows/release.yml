@@ -12,6 +12,9 @@ concurrency:
   group: release-${{ github.ref_name }}
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Regression tests
@@ -34,12 +37,45 @@ jobs:
       - name: Run tests
         run: pytest -q
 
+  container_validation:
+    name: Container validation
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Validate development Compose profile
+        env:
+          LMS_DOCKER_ENV_FILE: .env.docker.example
+        run: docker compose --env-file .env.docker.example --profile development -f docker-compose.yml config
+
+      - name: Validate production Compose profile
+        env:
+          LMS_DOCKER_ENV_FILE: .env.production.example
+        run: docker compose --env-file .env.production.example --profile production -f docker-compose.yml config
+
+      - name: Validate pull-only production Compose
+        env:
+          LMS_PRODUCTION_ENV_FILE: .env.production.example
+        run: docker compose --env-file .env.production.example -f production.yml config
+
+      - name: Build production profile without pushing
+        env:
+          LMS_DOCKER_ENV_FILE: .env.production.example
+        run: docker compose --env-file .env.production.example --profile production -f docker-compose.yml build lms
+
   release:
     name: Semantic release
     needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      release_tag: ${{ steps.release_tag.outputs.tag }}
     steps:
       - name: Checkout (full history + tags)
         uses: actions/checkout@v4
@@ -67,3 +103,70 @@ jobs:
             --package=@semantic-release/exec@7.1.0 \
             --package=@semantic-release/git@11.0.1 \
             semantic-release
+
+      - name: Find release tag created for this commit
+        id: release_tag
+        run: |
+          TAG="$(git tag --points-at HEAD --list '[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -n 1)"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+  publish_image:
+    name: Publish production image
+    needs: release
+    if: needs.release.outputs.release_tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout released source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs.release_tag }}
+          fetch-depth: 0
+
+      - name: Read released revision
+        id: revision
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/lms-system
+          tags: |
+            type=raw,value=${{ needs.release.outputs.release_tag }}
+            type=raw,value=latest
+          labels: |
+            org.opencontainers.image.title=LMS System
+            org.opencontainers.image.description=LMS backend service
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ needs.release.outputs.release_tag }}
+            org.opencontainers.image.revision=${{ steps.revision.outputs.sha }}
+
+      - name: Build and push production image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          target: production
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            VERSION=${{ needs.release.outputs.release_tag }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: mode=max
+          sbom: true

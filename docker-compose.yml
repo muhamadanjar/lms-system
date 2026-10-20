@@ -1,0 +1,63 @@
+name: lms-system
+
+x-healthcheck: &healthcheck
+  test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/db', timeout=3)"]
+  interval: 30s
+  timeout: 5s
+  start_period: 20s
+  retries: 3
+
+x-app-service: &app-service
+  env_file:
+    - ${LMS_DOCKER_ENV_FILE:-.env.docker}
+  extra_hosts:
+    - host.docker.internal:host-gateway
+  healthcheck: *healthcheck
+
+services:
+  lms-dev:
+    <<: *app-service
+    profiles: [development]
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: dev
+    ports:
+      - "${LMS_API_PORT:-8000}:8000"
+    volumes:
+      - ./:/app
+      - ./var/private-files:/app/var/private-files
+
+  lms:
+    <<: *app-service
+    profiles: [production]
+    image: ${LMS_IMAGE:-lms-system:${VERSION:-0.0.0}}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: production
+      args:
+        VERSION: ${VERSION:-0.0.0}
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      FILE_STORAGE_BACKEND: s3
+    ports:
+      - "${LMS_API_PORT:-8000}:8000"
+    restart: unless-stopped
+
+  migrate:
+    <<: *app-service
+    profiles: [production]
+    image: ${LMS_IMAGE:-lms-system:${VERSION:-0.0.0}}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: production
+      args:
+        VERSION: ${VERSION:-0.0.0}
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      FILE_STORAGE_BACKEND: s3
+    command: ["alembic", "upgrade", "head"]

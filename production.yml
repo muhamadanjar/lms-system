@@ -1,0 +1,30 @@
+name: lms-system
+
+services:
+  lms:
+    image: ${LMS_IMAGE:?LMS_IMAGE must be set to an immutable GHCR image reference}
+    env_file:
+      - ${LMS_PRODUCTION_ENV_FILE:-.env.production}
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      FILE_STORAGE_BACKEND: s3
+    ports:
+      - "${LMS_API_PORT:-8000}:8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/db', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  migrate:
+    image: ${LMS_IMAGE:?LMS_IMAGE must be set to an immutable GHCR image reference}
+    env_file:
+      - ${LMS_PRODUCTION_ENV_FILE:-.env.production}
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      FILE_STORAGE_BACKEND: s3
+    command: ["alembic", "upgrade", "head"]
