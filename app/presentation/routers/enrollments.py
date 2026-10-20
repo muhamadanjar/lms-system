@@ -17,7 +17,6 @@ from app.presentation.schemas.enrollment import (
     EnrollmentRead,
 )
 
-router = APIRouter(prefix="/api/courses/{course_slug}/enrollments", tags=["Legacy Compatibility"])
 admin_router = APIRouter(prefix="/api/admin/courses/{course_slug}/enrollments", tags=["Admin Enrollment"])
 learner_router = APIRouter(prefix="/api/learner/courses/{course_slug}/enrollments", tags=["Learner Enrollment"])
 
@@ -41,7 +40,6 @@ def _authorize_self_or_editor(user: CurrentUser, target_user_id: str) -> None:
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role")
 
 
-@router.post("", response_model=ApiResponse[EnrollmentRead], status_code=status.HTTP_201_CREATED, deprecated=True)
 async def enroll_course(
     course_slug: str,
     payload: EnrollmentCreate,
@@ -78,7 +76,6 @@ async def learner_enroll_course(
     return ApiResponse(data=enrollment_read(enrollment), meta={"resource": "enrollment"})
 
 
-@router.get("/me", response_model=ApiResponse[EnrollmentRead | None], deprecated=True)
 @learner_router.get("/me", response_model=ApiResponse[EnrollmentRead | None])
 async def get_my_enrollment(
     course_slug: str,
@@ -89,7 +86,6 @@ async def get_my_enrollment(
     return ApiResponse(data=enrollment_read(enrollment) if enrollment is not None else None, meta={"resource": "enrollment"})
 
 
-@router.get("", response_model=ApiResponse[list[EnrollmentRead]], deprecated=True)
 async def list_enrollments(
     course_slug: str,
     _user: CurrentUser = Depends(require_content_editor),
@@ -109,7 +105,6 @@ async def list_admin_course_enrollments(
     return ApiResponse(data=[enrollment_read(e) for e in live], meta={"resource": "enrollments"})
 
 
-@router.post("/{user_id}/complete", response_model=ApiResponse[EnrollmentRead], deprecated=True)
 @admin_router.post("/{user_id}/complete", response_model=ApiResponse[EnrollmentRead])
 async def complete_enrollment(
     course_slug: str,
@@ -122,7 +117,6 @@ async def complete_enrollment(
     return ApiResponse(data=enrollment_read(enrollment), meta={"resource": "enrollment"})
 
 
-@router.post("/{user_id}/withdraw", response_model=ApiResponse[EnrollmentRead], deprecated=True)
 async def withdraw_enrollment(
     course_slug: str,
     user_id: str,
@@ -158,7 +152,6 @@ async def learner_withdraw_enrollment(
     return ApiResponse(data=enrollment_read(enrollment), meta={"resource": "enrollment"})
 
 
-@router.post("/bulk", response_model=ApiResponse[BulkEnrollResponse], status_code=status.HTTP_207_MULTI_STATUS, deprecated=True)
 @admin_router.post("/bulk", response_model=ApiResponse[BulkEnrollResponse], status_code=status.HTTP_207_MULTI_STATUS)
 async def bulk_enroll_course(
     course_slug: str,

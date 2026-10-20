@@ -38,7 +38,7 @@ def _as(user: CurrentUser):
 
 
 async def _seed_course(client: httpx.AsyncClient) -> None:
-    response = await client.post("/api/courses", json={"title": "Enrollment Course", "slug": COURSE})
+    response = await client.post("/api/admin/courses", json={"title": "Enrollment Course", "slug": COURSE})
     assert response.status_code == 201, response.text
 
 
@@ -48,15 +48,15 @@ async def test_enroll_idempotent_and_my_enrollment(session):
     try:
         async with client:
             await _seed_course(client)
-            first = await client.post(f"/api/courses/{COURSE}/enrollments", json={"user_id": "peserta-1"})
+            first = await client.post(f"/api/admin/courses/{COURSE}/enrollments", json={"user_id": "peserta-1"})
             assert first.status_code == 201, first.text
             assert first.json()["data"]["status"] == "ENROLLED"
-            second = await client.post(f"/api/courses/{COURSE}/enrollments", json={"user_id": "peserta-1"})
+            second = await client.post(f"/api/admin/courses/{COURSE}/enrollments", json={"user_id": "peserta-1"})
             assert second.status_code in (200, 201)
             assert second.json()["data"]["id"] == first.json()["data"]["id"]
 
             _as(_user("peserta-1"))
-            me = await client.get(f"/api/courses/{COURSE}/enrollments/me")
+            me = await client.get(f"/api/learner/courses/{COURSE}/enrollments/me")
             assert me.status_code == 200
             assert me.json()["data"]["user_id"] == "peserta-1"
     finally:
@@ -70,7 +70,7 @@ async def test_cannot_enroll_other_user_as_learner(session):
         async with client:
             await _seed_course(client)
             _as(_user("peserta-1"))
-            response = await client.post(f"/api/courses/{COURSE}/enrollments", json={"user_id": "peserta-2"})
+            response = await client.post(f"/api/learner/courses/{COURSE}/enrollments", json={"user_id": "peserta-2"})
             assert response.status_code == 403
     finally:
         app.dependency_overrides.clear()
@@ -83,11 +83,11 @@ async def test_lab_gate_requires_enrollment(session):
         async with client:
             await _seed_course(client)
             response = await client.post(
-                "/api/v1/servers",
+                "/api/admin/servers",
                 json={"name": "gate-box", "host": "10.0.2.9", "username": "u", "credential": {"method": "PASSWORD", "password": "secret"}},
             )
             assert response.status_code == 201, response.text
-            denied = await client.post(f"/api/courses/{COURSE}/lab/enroll", json={"user_id": "luar"})
+            denied = await client.post(f"/api/admin/courses/{COURSE}/lab/enroll", json={"user_id": "luar"})
             assert denied.status_code == 403
             assert denied.json()["error"]["code"] == "ENROLLMENT_REQUIRED"
     finally:
@@ -101,21 +101,21 @@ async def test_withdraw_releases_lab_and_reenroll(session):
         async with client:
             await _seed_course(client)
             response = await client.post(
-                "/api/v1/servers",
+                "/api/admin/servers",
                 json={"name": "reuse-box", "host": "10.0.2.10", "username": "u", "credential": {"method": "PASSWORD", "password": "secret"}},
             )
             assert response.status_code == 201, response.text
-            assert (await client.post(f"/api/courses/{COURSE}/enrollments", json={"user_id": "u1"})).status_code == 201
-            lab = await client.post(f"/api/courses/{COURSE}/lab/enroll", json={"user_id": "u1"})
+            assert (await client.post(f"/api/admin/courses/{COURSE}/enrollments", json={"user_id": "u1"})).status_code == 201
+            lab = await client.post(f"/api/admin/courses/{COURSE}/lab/enroll", json={"user_id": "u1"})
             assert lab.status_code == 201, lab.text
             server_id = lab.json()["data"]["server_id"]
 
-            withdrawn = await client.post(f"/api/courses/{COURSE}/enrollments/u1/withdraw")
+            withdrawn = await client.post(f"/api/admin/courses/{COURSE}/enrollments/u1/withdraw")
             assert withdrawn.status_code == 200
             assert withdrawn.json()["data"]["status"] == "WITHDRAWN"
 
-            assert (await client.post(f"/api/courses/{COURSE}/enrollments", json={"user_id": "u2"})).status_code == 201
-            lab2 = await client.post(f"/api/courses/{COURSE}/lab/enroll", json={"user_id": "u2"})
+            assert (await client.post(f"/api/admin/courses/{COURSE}/enrollments", json={"user_id": "u2"})).status_code == 201
+            lab2 = await client.post(f"/api/admin/courses/{COURSE}/lab/enroll", json={"user_id": "u2"})
             assert lab2.status_code == 201, lab2.text
             assert lab2.json()["data"]["server_id"] == server_id
     finally:
@@ -129,19 +129,19 @@ async def test_complete_keeps_lab_access(session):
         async with client:
             await _seed_course(client)
             response = await client.post(
-                "/api/v1/servers",
+                "/api/admin/servers",
                 json={"name": "keep-box", "host": "10.0.2.11", "username": "u", "credential": {"method": "PASSWORD", "password": "secret"}},
             )
             assert response.status_code == 201, response.text
-            assert (await client.post(f"/api/courses/{COURSE}/enrollments", json={"user_id": "u3"})).status_code == 201
-            assert (await client.post(f"/api/courses/{COURSE}/lab/enroll", json={"user_id": "u3"})).status_code == 201
-            done = await client.post(f"/api/courses/{COURSE}/enrollments/u3/complete", json={})
+            assert (await client.post(f"/api/admin/courses/{COURSE}/enrollments", json={"user_id": "u3"})).status_code == 201
+            assert (await client.post(f"/api/admin/courses/{COURSE}/lab/enroll", json={"user_id": "u3"})).status_code == 201
+            done = await client.post(f"/api/admin/courses/{COURSE}/enrollments/u3/complete", json={})
             assert done.status_code == 200
             assert done.json()["data"]["status"] == "COMPLETED"
             assert done.json()["data"]["completed_at"]
 
             _as(_user("u3"))
-            mine = await client.get(f"/api/courses/{COURSE}/lab/my-lab")
+            mine = await client.get(f"/api/learner/courses/{COURSE}/lab/my-lab")
             assert mine.status_code == 200
             assert mine.json()["data"]["server_id"]
     finally:
@@ -182,9 +182,9 @@ async def test_bulk_enroll_207_with_buckets(session, monkeypatch):
     try:
         async with client:
             await _seed_course(client)
-            assert (await client.post(f"/api/courses/{COURSE}/enrollments", json={"user_id": "existing"})).status_code == 201
+            assert (await client.post(f"/api/admin/courses/{COURSE}/enrollments", json={"user_id": "existing"})).status_code == 201
             response = await client.post(
-                f"/api/courses/{COURSE}/enrollments/bulk",
+                f"/api/admin/courses/{COURSE}/enrollments/bulk",
                 json={"users": [{"user_id": "u1"}, {"user_id": "existing"}, {"user_id": "   "}, {}, {"email": "A@x.id"}]},
             )
             assert response.status_code == 207, response.text
@@ -204,7 +204,7 @@ async def test_bulk_enroll_duplicate_within_request(session, monkeypatch):
         async with client:
             await _seed_course(client)
             response = await client.post(
-                f"/api/courses/{COURSE}/enrollments/bulk",
+                f"/api/admin/courses/{COURSE}/enrollments/bulk",
                 json={"users": [{"user_id": "u1"}, {"user_id": "u1"}]},
             )
             assert response.status_code == 207
@@ -222,7 +222,7 @@ async def test_bulk_enroll_email_failures(session, monkeypatch):
         async with client:
             await _seed_course(client)
             response = await client.post(
-                f"/api/courses/{COURSE}/enrollments/bulk",
+                f"/api/admin/courses/{COURSE}/enrollments/bulk",
                 json={"users": [{"email": "ghost@x.id"}, {"email": "dup@x.id"}, {"user_id": "u9"}]},
             )
             assert response.status_code == 207
@@ -241,7 +241,7 @@ async def test_bulk_enroll_directory_down_only_fails_emails(session, monkeypatch
         async with client:
             await _seed_course(client)
             response = await client.post(
-                f"/api/courses/{COURSE}/enrollments/bulk",
+                f"/api/admin/courses/{COURSE}/enrollments/bulk",
                 json={"users": [{"email": "a@x.id"}, {"user_id": "u1"}]},
             )
             assert response.status_code == 207
@@ -260,7 +260,7 @@ async def test_bulk_denied_for_learner(session, monkeypatch):
         async with client:
             await _seed_course(client)
             _as(_user("peserta-1"))
-            response = await client.post(f"/api/courses/{COURSE}/enrollments/bulk", json={"users": [{"user_id": "u1"}]})
+            response = await client.post(f"/api/admin/courses/{COURSE}/enrollments/bulk", json={"users": [{"user_id": "u1"}]})
             assert response.status_code == 403
     finally:
         app.dependency_overrides.clear()
@@ -274,7 +274,7 @@ async def test_bulk_rejects_over_limit(session, monkeypatch):
         async with client:
             await _seed_course(client)
             response = await client.post(
-                f"/api/courses/{COURSE}/enrollments/bulk",
+                f"/api/admin/courses/{COURSE}/enrollments/bulk",
                 json={"users": [{"user_id": f"u-{i}"} for i in range(101)]},
             )
             assert response.status_code == 422

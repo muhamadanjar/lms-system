@@ -16,7 +16,6 @@ from app.presentation.schemas.server import (
 )
 from fastapi.exceptions import HTTPException
 
-router = APIRouter(prefix="/api/v1/servers", tags=["Legacy Compatibility"])
 admin_router = APIRouter(prefix="/api/admin/servers", tags=["Admin Servers"])
 
 
@@ -24,7 +23,6 @@ def use_cases(uow: SqlModelUnitOfWork) -> ServerInventoryUseCase:
     return ServerInventoryUseCase(lambda: uow)
 
 
-@router.get("", response_model=ApiResponse[list[ServerRead]], deprecated=True)
 @admin_router.get("", response_model=ApiResponse[list[ServerRead]])
 async def list_servers(
     query: PaginationQuery = Depends(),
@@ -38,7 +36,6 @@ async def list_servers(
     )
 
 
-@router.post("", response_model=ApiResponse[ServerRead], status_code=status.HTTP_201_CREATED, deprecated=True)
 @admin_router.post("", response_model=ApiResponse[ServerRead], status_code=status.HTTP_201_CREATED)
 async def create_server(
     payload: ServerCreate,
@@ -57,7 +54,6 @@ async def create_server(
     return ApiResponse(data=server_read(server), meta={"resource": "server"})
 
 
-@router.get("/{server_id}", response_model=ApiResponse[ServerRead], deprecated=True)
 @admin_router.get("/{server_id}", response_model=ApiResponse[ServerRead])
 async def get_server(
     server_id: UUID,
@@ -68,7 +64,6 @@ async def get_server(
     return ApiResponse(data=server_read(server), meta={"resource": "server"})
 
 
-@router.patch("/{server_id}", response_model=ApiResponse[ServerRead], deprecated=True)
 @admin_router.patch("/{server_id}", response_model=ApiResponse[ServerRead])
 async def update_server(
     server_id: UUID,
@@ -92,7 +87,6 @@ async def update_server(
     return ApiResponse(data=server_read(server), meta={"resource": "server"})
 
 
-@router.delete("/{server_id}", status_code=status.HTTP_204_NO_CONTENT, deprecated=True)
 @admin_router.delete("/{server_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_server(
     server_id: UUID,

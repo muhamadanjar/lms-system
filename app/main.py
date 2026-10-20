@@ -25,50 +25,37 @@ from fastapi.exceptions import RequestValidationError
 from app.presentation.routers.courses import (
     admin_router as admin_courses_router,
     learner_router as learner_courses_router,
-    router as courses_router,
 )
 from app.presentation.routers.course_labs import (
     admin_router as admin_course_labs_router,
     learner_router as learner_course_labs_router,
-    router as course_labs_router,
 )
 from app.presentation.routers.course_instructors import admin_router as admin_course_instructors_router
 from app.presentation.routers.lms_overview import admin_lms_router
 from app.presentation.routers.enrollments import (
     admin_router as admin_course_enrollments_router,
     learner_router as learner_course_enrollments_router,
-    router as enrollments_router,
 )
-from app.presentation.routers.learner_enrollments import (
-    learner_router as canonical_learner_enrollments_router,
-    router as learner_enrollments_router,
-)
-from app.presentation.routers.admin_enrollments import (
-    admin_router as canonical_admin_enrollments_router,
-    router as admin_enrollments_router,
-)
+from app.presentation.routers.learner_enrollments import learner_router as canonical_learner_enrollments_router
+from app.presentation.routers.admin_enrollments import admin_router as canonical_admin_enrollments_router
 from app.presentation.routers.modules import (
     admin_router as admin_modules_router,
     learner_router as learner_modules_router,
-    router as modules_router,
 )
 from app.presentation.routers.sections import (
     admin_router as admin_sections_router,
     learner_router as learner_sections_router,
-    router as sections_router,
 )
-from app.presentation.routers.servers import admin_router as admin_servers_router, router as servers_router
+from app.presentation.routers.servers import admin_router as admin_servers_router
 from app.presentation.routers.quizzes import (
     admin_router as admin_quizzes_router,
     learner_router as learner_quizzes_router,
-    router as quizzes_router,
 )
 from app.presentation.routers.collect_tasks import (
     admin_files_router,
     admin_router as admin_collect_tasks_router,
     learner_files_router,
     learner_router as learner_collect_tasks_router,
-    router as collect_tasks_router,
 )
 from app.presentation.websocket.console import get_console_registry, ws_router as console_ws_router
 
@@ -131,7 +118,6 @@ OPENAPI_TAGS = [
     {"name": "Learner Course Labs"},
     {"name": "Learner Collect Tasks"},
     {"name": "Learner Files"},
-    {"name": "Legacy Compatibility"},
 ]
 
 app = FastAPI(
@@ -171,16 +157,6 @@ app.include_router(canonical_learner_enrollments_router)
 app.include_router(learner_course_labs_router)
 app.include_router(learner_collect_tasks_router)
 app.include_router(learner_files_router)
-app.include_router(courses_router)
-app.include_router(course_labs_router)
-app.include_router(enrollments_router)
-app.include_router(learner_enrollments_router)
-app.include_router(admin_enrollments_router)
-app.include_router(modules_router)
-app.include_router(sections_router)
-app.include_router(servers_router)
-app.include_router(quizzes_router)
-app.include_router(collect_tasks_router)
 app.include_router(console_ws_router)
 app.add_exception_handler(DomainError, handle_domain_error)
 app.add_exception_handler(IntegrityError, handle_integrity_error)

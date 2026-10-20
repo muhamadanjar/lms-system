@@ -29,7 +29,6 @@ from app.presentation.schemas.learner_progress import (
     course_progress_read,
 )
 
-router = APIRouter(prefix="/api/courses", tags=["Legacy Compatibility"])
 admin_router = APIRouter(prefix="/api/admin/courses", tags=["Admin Courses"])
 learner_router = APIRouter(prefix="/api/learner/courses", tags=["Learner Courses"])
 
@@ -59,7 +58,6 @@ def read_filter(query: PaginationQuery, user: CurrentUser) -> tuple[ContentStatu
     return ContentStatus.PUBLISHED, False
 
 
-@router.get("", response_model=ApiResponse[list[CourseRead]], deprecated=True)
 async def list_courses(
     query: PaginationQuery = Depends(),
     user: CurrentUser = Depends(get_current_user),
@@ -90,7 +88,6 @@ async def list_learner_courses(
     return ApiResponse(data=[course_read(item) for item in items], meta={"page": query.page, "page_size": query.page_size, "total": total})
 
 
-@router.post("", response_model=ApiResponse[CourseRead], status_code=status.HTTP_201_CREATED, deprecated=True)
 @admin_router.post("", response_model=ApiResponse[CourseRead], status_code=status.HTTP_201_CREATED)
 async def create_course(
     payload: CourseCreate,
@@ -101,7 +98,6 @@ async def create_course(
     return ApiResponse(data=course_read(course), meta={"resource": "course"})
 
 
-@router.get("/{course_slug}", response_model=ApiResponse[CourseRead], deprecated=True)
 async def get_course(
     course_slug: str,
     include_archived: bool = Query(default=False),
@@ -166,7 +162,6 @@ async def get_learner_course(
     return ApiResponse(data=course_read(hierarchy.course, modules, sections_by_module, access), meta={})
 
 
-@router.get("/{course_slug}/progress", response_model=ApiResponse[CourseProgressRead], deprecated=True)
 @learner_router.get("/{course_slug}/progress", response_model=ApiResponse[CourseProgressRead])
 async def get_course_progress(
     course_slug: str,
@@ -196,7 +191,6 @@ async def put_course_progress_position(
     )
 
 
-@router.patch("/{course_slug}", response_model=ApiResponse[CourseRead], deprecated=True)
 @admin_router.patch("/{course_slug}", response_model=ApiResponse[CourseRead])
 async def update_course(
     course_slug: str,
@@ -208,7 +202,6 @@ async def update_course(
     return ApiResponse(data=course_read(course), meta={"resource": "course"})
 
 
-@router.delete("/{course_slug}", status_code=status.HTTP_204_NO_CONTENT, deprecated=True)
 @admin_router.delete("/{course_slug}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_course(
     course_slug: str,

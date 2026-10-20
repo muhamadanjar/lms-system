@@ -35,8 +35,12 @@ class LearnerProgressUseCases:
                 raise NotFoundError("text material section not found")
             if course.status is not ContentStatus.PUBLISHED or module.status is not ContentStatus.PUBLISHED or section.status is not ContentStatus.PUBLISHED:
                 raise NotFoundError("text material section not found")
-            enrollment = await uow.enrollments.get_live(learner_id, course.id)
-            if enrollment is None:
+            # Mirrors record_position: a learner who already finished the Course
+            # (COMPLETED) keeps browsing and recording progress, so re-marking an
+            # already-open Section must not be rejected as unauthorized.
+            history = await uow.enrollments.list_history(learner_id, course.id)
+            enrollment = history[0] if history else None
+            if enrollment is None or enrollment.status not in {EnrollmentStatus.ENROLLED, EnrollmentStatus.COMPLETED}:
                 raise AuthorizationError("active course enrollment is required")
             await self._assert_section_access(uow, learner_id, course.id, section.id)
             result = await uow.learning_progress.mark_section_complete(learner_id, section.id)

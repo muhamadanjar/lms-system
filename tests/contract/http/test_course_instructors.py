@@ -33,7 +33,7 @@ async def test_assign_instructor_is_admin_only_and_conflicts_on_duplicate(sessio
     client = await _client(session, _user("admin-1", ("admin",)))
     try:
         async with client:
-            seeded = await client.post("/api/courses", json={"title": "Instructor Course", "slug": COURSE})
+            seeded = await client.post("/api/admin/courses", json={"title": "Instructor Course", "slug": COURSE})
             assert seeded.status_code == 201, seeded.text
 
             first = await client.post(f"/api/admin/courses/{COURSE}/instructors", json={"user_id": "guru-1"})

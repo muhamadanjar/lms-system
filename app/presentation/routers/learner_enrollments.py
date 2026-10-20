@@ -13,7 +13,6 @@ from app.presentation.schemas.enrollment import (
     LearnerEnrollmentSummaryRead,
 )
 
-router = APIRouter(prefix="/api/me/enrollments", tags=["Legacy Compatibility"])
 learner_router = APIRouter(prefix="/api/learner/enrollments", tags=["Learner Enrollment"])
 
 
@@ -21,7 +20,6 @@ def use_cases(uow: SqlModelUnitOfWork) -> EnrollmentUseCases:
     return EnrollmentUseCases(lambda: uow)
 
 
-@router.get("", response_model=ApiResponse[list[LearnerCourseRead]], deprecated=True)
 @learner_router.get("", response_model=ApiResponse[list[LearnerCourseRead]])
 async def list_my_enrollments(
     user: CurrentUser = Depends(get_current_user),

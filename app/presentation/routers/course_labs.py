@@ -9,7 +9,6 @@ from app.presentation.dependencies.auth import get_current_user, require_content
 from app.presentation.schemas.content import ApiResponse
 from app.presentation.schemas.lab_access import CourseLabAccessRead, EnrollmentCreate
 
-router = APIRouter(prefix="/api/courses/{course_slug}/lab", tags=["Legacy Compatibility"])
 admin_router = APIRouter(prefix="/api/admin/courses/{course_slug}/lab", tags=["Admin Course Labs"])
 learner_router = APIRouter(prefix="/api/learner/courses/{course_slug}/lab", tags=["Learner Course Labs"])
 
@@ -28,7 +27,6 @@ def _authorize_enrollment(user: CurrentUser, target_user_id: str) -> None:
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role")
 
 
-@router.get("/my-lab", response_model=ApiResponse[CourseLabAccessRead | None], deprecated=True)
 @learner_router.get("/my-lab", response_model=ApiResponse[CourseLabAccessRead | None])
 async def get_my_lab_access(
     course_slug: str,
@@ -39,7 +37,6 @@ async def get_my_lab_access(
     return ApiResponse(data=access_read(access) if access is not None else None, meta={"resource": "course_lab_access"})
 
 
-@router.post("/enroll", response_model=ApiResponse[CourseLabAccessRead], status_code=status.HTTP_201_CREATED, deprecated=True)
 async def enroll_lab(
     course_slug: str,
     payload: EnrollmentCreate,
@@ -75,7 +72,6 @@ async def learner_enroll_lab(
     return ApiResponse(data=access_read(access), meta={"resource": "course_lab_access"})
 
 
-@router.delete("/release/{user_id}", response_model=ApiResponse[CourseLabAccessRead], deprecated=True)
 async def release_lab(
     course_slug: str,
     user_id: str,
@@ -111,7 +107,6 @@ async def learner_release_lab(
     return ApiResponse(data=access_read(access), meta={"resource": "course_lab_access"})
 
 
-@router.get("/accesses", response_model=ApiResponse[list[CourseLabAccessRead]], deprecated=True)
 @admin_router.get("/accesses", response_model=ApiResponse[list[CourseLabAccessRead]])
 async def list_lab_accesses(
     course_slug: str,

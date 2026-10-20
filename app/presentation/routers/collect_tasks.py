@@ -31,7 +31,6 @@ from app.presentation.schemas.collect_tasks import (
 )
 from app.presentation.schemas.content import ApiResponse
 
-router = APIRouter(tags=["Legacy Compatibility"])
 learner_router = APIRouter(tags=["Learner Collect Tasks"])
 admin_router = APIRouter(tags=["Admin Collect Tasks"])
 learner_files_router = APIRouter(tags=["Learner Files"])
@@ -40,14 +39,12 @@ _section_path = "/api/courses/{course_slug}/modules/{module_slug}/sections/{sect
 _learner_section_path = "/api/learner/courses/{course_slug}/modules/{module_slug}/sections/{section_slug}/collect-task"
 
 
-@router.post(_section_path + "/submissions", response_model=ApiResponse[CollectTaskRead], deprecated=True)
 @learner_router.post(_learner_section_path + "/submissions", response_model=ApiResponse[CollectTaskRead])
 async def submit_collect_task(course_slug: str, module_slug: str, section_slug: str, payload: CollectTaskSubmissionRequest, user: CurrentUser = Depends(get_current_user), uow: SqlModelUnitOfWork = Depends(get_uow)):
     task = await CollectTaskUseCases(lambda: uow).submit(user, course_slug, module_slug, section_slug, payload.text, [str(url) for url in payload.evidence_urls], file_ids=payload.file_ids)
     return ApiResponse(data=collect_task_read(task), meta={})
 
 
-@router.post(_section_path + "/files", response_model=ApiResponse[CollectTaskFileUploadRead], deprecated=True)
 @learner_router.post(_learner_section_path + "/files", response_model=ApiResponse[CollectTaskFileUploadRead])
 async def upload_collect_task_file(
     course_slug: str,
@@ -72,7 +69,6 @@ async def upload_collect_task_file(
     return ApiResponse(data=collect_task_file_upload_read(metadata), meta={})
 
 
-@router.delete(_section_path + "/files/{file_id}", status_code=204, deprecated=True)
 @learner_router.delete(_learner_section_path + "/files/{file_id}", status_code=204)
 async def discard_collect_task_file(
     course_slug: str,
@@ -89,7 +85,6 @@ async def discard_collect_task_file(
     return Response(status_code=204)
 
 
-@router.post(_section_path + "/submissions/files", response_model=ApiResponse[CollectTaskRead], deprecated=True)
 @learner_router.post(_learner_section_path + "/submissions/files", response_model=ApiResponse[CollectTaskRead])
 async def submit_collect_task_files(
     course_slug: str,
@@ -141,7 +136,6 @@ async def submit_collect_task_files(
     return ApiResponse(data=collect_task_read(task), meta={})
 
 
-@router.get(_section_path, response_model=ApiResponse[CollectTaskRead | None], deprecated=True)
 @learner_router.get(_learner_section_path, response_model=ApiResponse[CollectTaskRead | None])
 async def get_my_collect_task(course_slug: str, module_slug: str, section_slug: str, user: CurrentUser = Depends(get_current_user), uow: SqlModelUnitOfWork = Depends(get_uow)):
     task = await CollectTaskUseCases(lambda: uow).mine(user, course_slug, module_slug, section_slug)
@@ -213,7 +207,6 @@ async def review_collect_task(
     return ApiResponse(data=collect_task_read(task), meta={})
 
 
-@router.get("/api/files/{file_id}", deprecated=True)
 async def download_task_file(
     file_id: UUID,
     user: CurrentUser = Depends(get_current_user),

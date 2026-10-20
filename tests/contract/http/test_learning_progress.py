@@ -5,8 +5,9 @@ from app.application.ports.auth import CurrentUser
 from app.application.dto.quiz_sittings import AnswerSelectionInput
 from app.application.use_cases.quiz_sittings import QuizSittingUseCases
 from app.domain.entities.answer import Answer
+from app.domain.entities.base import utc_now
 from app.domain.entities.course import Course
-from app.domain.entities.enrollment import Enrollment
+from app.domain.entities.enrollment import Enrollment, EnrollmentStatus
 from app.domain.entities.module import Module
 from app.domain.entities.question import Question
 from app.domain.entities.quiz import KnowledgeQuiz
@@ -48,25 +49,25 @@ async def test_sequential_access_hides_locked_body_until_material_is_completed(s
     app.dependency_overrides[get_current_user] = override_user
     try:
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-            listing = await client.get("/api/courses/sequential/modules/module/sections")
+            listing = await client.get("/api/learner/courses/sequential/modules/module/sections")
             rows = listing.json()["data"]
             assert rows[0]["is_accessible"] is True
             assert rows[1]["is_accessible"] is False
             assert rows[1]["body"] is None
 
-            course_detail = await client.get("/api/courses/sequential")
-            module_detail = await client.get("/api/courses/sequential/modules/module")
+            course_detail = await client.get("/api/learner/courses/sequential")
+            module_detail = await client.get("/api/learner/courses/sequential/modules/module")
             assert course_detail.json()["data"]["modules"][0]["sections"][1]["body"] is None
             assert course_detail.json()["data"]["modules"][0]["sections"][1]["is_accessible"] is False
             assert module_detail.json()["data"]["sections"][1]["body"] is None
 
-            locked = await client.get("/api/courses/sequential/modules/module/sections/later")
+            locked = await client.get("/api/learner/courses/sequential/modules/module/sections/later")
             assert locked.status_code == 422
             assert "Locked text" not in locked.text
 
-            completed = await client.post("/api/courses/sequential/modules/module/sections/first/complete")
+            completed = await client.post("/api/learner/courses/sequential/modules/module/sections/first/complete")
             assert completed.status_code == 200
-            unlocked = await client.get("/api/courses/sequential/modules/module/sections/later")
+            unlocked = await client.get("/api/learner/courses/sequential/modules/module/sections/later")
             assert unlocked.status_code == 200
             assert unlocked.json()["data"]["body"] == "Locked text"
     finally:
@@ -223,18 +224,18 @@ async def test_sequential_access_continues_across_module_boundary(session):
     app.dependency_overrides[get_current_user] = override_user
     try:
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-            module_detail = await client.get("/api/courses/module-sequence/modules/next-module")
+            module_detail = await client.get("/api/learner/courses/module-sequence/modules/next-module")
             section = module_detail.json()["data"]["sections"][0]
             assert section["is_accessible"] is False
             assert section["body"] is None
 
-            blocked = await client.get("/api/courses/module-sequence/modules/next-module/sections/later-material")
+            blocked = await client.get("/api/learner/courses/module-sequence/modules/next-module/sections/later-material")
             assert blocked.status_code == 422
             assert "Locked across modules" not in blocked.text
 
-            completed = await client.post("/api/courses/module-sequence/modules/first-module/sections/first-material/complete")
+            completed = await client.post("/api/learner/courses/module-sequence/modules/first-module/sections/first-material/complete")
             assert completed.status_code == 200
-            unlocked = await client.get("/api/courses/module-sequence/modules/next-module/sections/later-material")
+            unlocked = await client.get("/api/learner/courses/module-sequence/modules/next-module/sections/later-material")
             assert unlocked.status_code == 200
             assert unlocked.json()["data"]["body"] == "Locked across modules"
     finally:
@@ -275,7 +276,7 @@ async def test_collect_task_submission_review_and_self_learning_completion(sessi
     try:
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post(
-                "/api/courses/lab-course/modules/lab-module/sections/lab/collect-task/submissions",
+                "/api/learner/courses/lab-course/modules/lab-module/sections/lab/collect-task/submissions",
                 json={"text": "Completed the lab", "evidence_urls": ["https://example.org/result"]},
             )
             assert response.status_code == 200
@@ -293,7 +294,7 @@ async def test_collect_task_submission_review_and_self_learning_completion(sessi
             assert published_notifications[0].idempotency_key
 
             actor["user"] = learner
-            own = await client.get("/api/courses/lab-course/modules/lab-module/sections/lab/collect-task")
+            own = await client.get("/api/learner/courses/lab-course/modules/lab-module/sections/lab/collect-task")
             assert own.status_code == 200
             assert own.json()["data"]["status"] == "REVIEWED"
 
@@ -399,7 +400,7 @@ async def test_collect_task_file_upload_keeps_revision_files_private_and_downloa
     app.dependency_overrides[get_uow] = override_uow
     app.dependency_overrides[get_current_user] = override_user
     app.dependency_overrides[get_file_storage] = override_storage
-    submit_url = "/api/courses/upload-course/modules/upload-module/sections/upload-lab/collect-task/submissions/files"
+    submit_url = "/api/learner/courses/upload-course/modules/upload-module/sections/upload-lab/collect-task/submissions/files"
     try:
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             first = await client.post(submit_url, data={"text": "Initial upload"}, files={"files": ("first.txt", b"first file", "text/plain")})
@@ -472,7 +473,7 @@ async def test_failed_required_quiz_keeps_next_section_locked_until_retry_passes
     app.dependency_overrides[get_current_user] = override_user
     try:
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-            locked = await client.get("/api/courses/quiz-course/modules/quiz-module/sections/next-material")
+            locked = await client.get("/api/learner/courses/quiz-course/modules/quiz-module/sections/next-material")
             assert locked.status_code == 422
 
             sittings = QuizSittingUseCases(SqlModelUnitOfWork(session=session))
@@ -485,7 +486,7 @@ async def test_failed_required_quiz_keeps_next_section_locked_until_retry_passes
                 option_id = next(option.id for option in snapshot[0].options if option.source_answer_id == wanted_answer)
                 await sittings.save_selections(draft.id, learner.id, (AnswerSelectionInput("Q-REQUIRED", (option_id,)),))
                 await sittings.finalize(draft.id, learner.id)
-                result = await client.get("/api/courses/quiz-course/modules/quiz-module/sections/next-material")
+                result = await client.get("/api/learner/courses/quiz-course/modules/quiz-module/sections/next-material")
                 assert result.status_code == (200 if should_pass else 422)
     finally:
         app.dependency_overrides.clear()
@@ -529,5 +530,44 @@ async def test_exam_section_does_not_lock_later_material(session):
             progress = await client.get("/api/learner/courses/exam-course/progress")
             assert progress.status_code == 200
             assert progress.json()["data"]["course_state"] == "PENDING_ADMIN_REVIEW"
+    finally:
+        app.dependency_overrides.clear()
+
+async def test_completed_learner_can_still_complete_text_material(session):
+    learner = CurrentUser(id="finished-learner", email="finished@example.com", roles=frozenset({"learner"}))
+    course = Course(
+        title="Finished",
+        slug="finished-course",
+        status=ContentStatus.PUBLISHED,
+        progression_mode=ProgressionMode.SEQUENTIAL,
+        completion_mode=CompletionMode.ADMIN_REVIEW,
+    )
+    module = Module(course_id=course.id, title="Module", slug="finished-module", status=ContentStatus.PUBLISHED)
+    section = Section(module_id=module.id, title="Text", slug="finished-text", position=0, status=ContentStatus.PUBLISHED, body="Text")
+    async with SqlModelUnitOfWork(session=session) as uow:
+        await uow.courses.create(course)
+        await uow.modules.create(module)
+        await uow.sections.create(section)
+        await uow.enrollments.create(Enrollment(user_id=learner.id, course_id=course.id, status=EnrollmentStatus.COMPLETED, completed_at=utc_now()))
+        await uow.commit()
+
+    async def override_uow():
+        yield SqlModelUnitOfWork(session=session)
+
+    async def override_user():
+        return learner
+
+    app.dependency_overrides[get_uow] = override_uow
+    app.dependency_overrides[get_current_user] = override_user
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            completed = await client.post(
+                "/api/learner/courses/finished-course/modules/finished-module/sections/finished-text/complete"
+            )
+            assert completed.status_code == 200
+
+            progress = await client.get("/api/learner/courses/finished-course/progress")
+            assert progress.status_code == 200
+            assert progress.json()["data"]["sections"][0]["is_complete"] is True
     finally:
         app.dependency_overrides.clear()

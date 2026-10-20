@@ -10,7 +10,6 @@ from app.presentation.dependencies.auth import get_current_user, require_content
 from app.presentation.routers.courses import can_manage, require_learner_enrollment, use_cases
 from app.presentation.schemas.content import ApiResponse, ModuleCreate, ModuleRead, ModuleUpdate, OrderRequest, PaginationQuery, module_read
 
-router = APIRouter(prefix="/api/courses/{course_slug}/modules", tags=["Legacy Compatibility"])
 admin_router = APIRouter(prefix="/api/admin/courses/{course_slug}/modules", tags=["Admin Modules"])
 learner_router = APIRouter(prefix="/api/learner/courses/{course_slug}/modules", tags=["Learner Modules"])
 
@@ -19,7 +18,6 @@ def read_filter(query: PaginationQuery, user: CurrentUser) -> tuple[ContentStatu
     return (query.status, query.include_archived) if can_manage(user) else (ContentStatus.PUBLISHED, False)
 
 
-@router.get("", response_model=ApiResponse[list[ModuleRead]], deprecated=True)
 async def list_modules(
     course_slug: str,
     query: PaginationQuery = Depends(),
@@ -76,7 +74,6 @@ async def list_learner_modules(
     return ApiResponse(data=[module_read(module) for module in modules], meta={"page": query.page, "page_size": query.page_size, "total": total})
 
 
-@router.post("", response_model=ApiResponse[ModuleRead], status_code=status.HTTP_201_CREATED, deprecated=True)
 @admin_router.post("", response_model=ApiResponse[ModuleRead], status_code=status.HTTP_201_CREATED)
 async def create_module(
     course_slug: str,
@@ -88,7 +85,6 @@ async def create_module(
     return ApiResponse(data=module_read(module), meta={"resource": "module"})
 
 
-@router.put("/order", response_model=ApiResponse[dict[str, str]], deprecated=True)
 @admin_router.put("/order", response_model=ApiResponse[dict[str, str]])
 async def reorder_modules(
     course_slug: str,
@@ -106,7 +102,6 @@ async def reorder_modules(
     return ApiResponse(data={"status": "reordered"}, meta={})
 
 
-@router.get("/{module_slug}", response_model=ApiResponse[ModuleRead], deprecated=True)
 async def get_module(
     course_slug: str,
     module_slug: str,
@@ -151,7 +146,8 @@ async def get_learner_module(
     user: CurrentUser = Depends(get_current_user),
     uow: SqlModelUnitOfWork = Depends(get_uow),
 ):
-    course, module, sections = await use_cases(uow).get_module(course_slug, module_slug)
+    # include_archived=True: fetch first, then 404 below when not published.
+    course, module, sections = await use_cases(uow).get_module(course_slug, module_slug, include_archived=True)
     if course.status is not ContentStatus.PUBLISHED or module.status is not ContentStatus.PUBLISHED:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="module not found")
@@ -164,7 +160,6 @@ async def get_learner_module(
     return ApiResponse(data=module_read(module, sections, access), meta={})
 
 
-@router.patch("/{module_slug}", response_model=ApiResponse[ModuleRead], deprecated=True)
 @admin_router.patch("/{module_slug}", response_model=ApiResponse[ModuleRead])
 async def update_module(
     course_slug: str,
@@ -177,7 +172,6 @@ async def update_module(
     return ApiResponse(data=module_read(module), meta={"resource": "module"})
 
 
-@router.delete("/{module_slug}", status_code=status.HTTP_204_NO_CONTENT, deprecated=True)
 @admin_router.delete("/{module_slug}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_module(
     course_slug: str,

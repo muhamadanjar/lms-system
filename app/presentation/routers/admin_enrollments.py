@@ -9,11 +9,9 @@ from app.presentation.dependencies.auth import require_content_editor
 from app.presentation.schemas.content import ApiResponse
 from app.presentation.schemas.enrollment import AdminEnrollmentRead
 
-router = APIRouter(prefix="/api/enrollments", tags=["Legacy Compatibility"])
 admin_router = APIRouter(prefix="/api/admin/enrollments", tags=["Admin Enrollment"])
 
 
-@router.get("", response_model=ApiResponse[list[AdminEnrollmentRead]], deprecated=True)
 @admin_router.get("", response_model=ApiResponse[list[AdminEnrollmentRead]])
 async def list_all_enrollments(
     search: str | None = Query(default=None, max_length=120),

@@ -33,14 +33,14 @@ def _as(user: CurrentUser):
 async def _seed_quiz_section(client: httpx.AsyncClient) -> str:
     admin = _user("admin-1", roles=("admin",))
     _as(admin)
-    assert (await client.post("/api/courses", json={"title": "Q", "slug": "quiz-guard-course"})).status_code == 201
-    assert (await client.post("/api/courses/quiz-guard-course/modules", json={"title": "M", "slug": "quiz-guard-m"})).status_code == 201
+    assert (await client.post("/api/admin/courses", json={"title": "Q", "slug": "quiz-guard-course"})).status_code == 201
+    assert (await client.post("/api/admin/courses/quiz-guard-course/modules", json={"title": "M", "slug": "quiz-guard-m"})).status_code == 201
     response = await client.post(
-        "/api/courses/quiz-guard-course/modules/quiz-guard-m/sections",
+        "/api/admin/courses/quiz-guard-course/modules/quiz-guard-m/sections",
         json={"title": "Quiz", "slug": "quiz-guard-s", "content_type": "QUIZ", "position": 0},
     )
     assert response.status_code == 201, response.text
-    return "/api/courses/quiz-guard-course/modules/quiz-guard-m/sections/quiz-guard-s/quiz"
+    return "/api/admin/courses/quiz-guard-course/modules/quiz-guard-m/sections/quiz-guard-s/quiz"
 
 
 async def test_learner_denied_on_quiz_authoring(session):
@@ -76,7 +76,7 @@ async def test_editor_may_configure_quiz(session):
     client = await _client(session, _user("admin-1", roles=("admin",)))
     try:
         async with client:
-            base = "/api/courses/quiz-guard-course/modules/quiz-guard-m/sections/quiz-guard-s/quiz"
+            base = "/api/admin/courses/quiz-guard-course/modules/quiz-guard-m/sections/quiz-guard-s/quiz"
             response = await client.patch(base, json={"is_exam": False, "passing_score": 82})
             assert response.status_code == 200, response.text
             assert response.json()["data"]["passing_score"] == 82
@@ -103,7 +103,7 @@ async def test_published_quiz_update_only_slug_is_immutable(session):
     client = await _client(session, _user("admin-1", roles=("admin",)))
     try:
         async with client:
-            base = "/api/courses/quiz-immutable-course/quizzes/quiz-immutable"
+            base = "/api/admin/courses/quiz-immutable-course/quizzes/quiz-immutable"
             assert (await client.patch(base, json={"status": "PUBLISHED"})).status_code == 200
             response = await client.patch(
                 base,
@@ -113,7 +113,7 @@ async def test_published_quiz_update_only_slug_is_immutable(session):
             assert response.json()["data"]["title"] == "Renamed quiz"
             assert response.json()["data"]["max_attempts"] == 3
             assert (await client.patch(base, json={"slug": "new-slug"})).status_code == 422
-            listed = (await client.get("/api/courses/quiz-immutable-course/quizzes")).json()["data"]
+            listed = (await client.get("/api/admin/courses/quiz-immutable-course/quizzes")).json()["data"]
             assert [q["slug"] for q in listed] == ["quiz-immutable"]
     finally:
         app.dependency_overrides.clear()

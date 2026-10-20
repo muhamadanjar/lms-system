@@ -9,7 +9,6 @@ from app.presentation.dependencies.auth import get_current_user, require_content
 from app.presentation.routers.courses import can_manage, require_learner_enrollment, use_cases
 from app.presentation.schemas.content import ApiResponse, OrderRequest, PaginationQuery, SectionCreate, SectionRead, SectionUpdate, section_read
 
-router = APIRouter(prefix="/api/courses/{course_slug}/modules/{module_slug}/sections", tags=["Legacy Compatibility"])
 admin_router = APIRouter(prefix="/api/admin/courses/{course_slug}/modules/{module_slug}/sections", tags=["Admin Sections"])
 learner_router = APIRouter(prefix="/api/learner/courses/{course_slug}/modules/{module_slug}/sections", tags=["Learner Sections"])
 
@@ -24,7 +23,6 @@ async def section_pagination_query(
     return PaginationQuery(page=page, page_size=page_size, status=status, include_archived=include_archived, search=search)
 
 
-@router.get("", response_model=ApiResponse[list[SectionRead]], deprecated=True)
 async def list_sections(
     course_slug: str,
     module_slug: str,
@@ -94,7 +92,6 @@ async def list_learner_sections(
     return ApiResponse(data=[section_read(section, access.get(section.id, True)) for section in sections], meta={"page": query.page, "page_size": query.page_size, "total": total})
 
 
-@router.post("", response_model=ApiResponse[SectionRead], status_code=status.HTTP_201_CREATED, deprecated=True)
 @admin_router.post("", response_model=ApiResponse[SectionRead], status_code=status.HTTP_201_CREATED)
 async def create_section(
     course_slug: str,
@@ -107,7 +104,6 @@ async def create_section(
     return ApiResponse(data=section_read(section), meta={"resource": "section"})
 
 
-@router.put("/order", response_model=ApiResponse[dict[str, str]], deprecated=True)
 @admin_router.put("/order", response_model=ApiResponse[dict[str, str]])
 async def reorder_sections(
     course_slug: str,
@@ -126,7 +122,6 @@ async def reorder_sections(
     return ApiResponse(data={"status": "reordered"}, meta={})
 
 
-@router.get("/{section_slug}", response_model=ApiResponse[SectionRead], deprecated=True)
 async def get_section(
     course_slug: str,
     module_slug: str,
@@ -181,14 +176,12 @@ async def get_learner_section(
     return ApiResponse(data=section_read(section), meta={})
 
 
-@router.post("/{section_slug}/complete", response_model=ApiResponse[dict[str, str]], deprecated=True)
 @learner_router.post("/{section_slug}/complete", response_model=ApiResponse[dict[str, str]])
 async def complete_text_section(course_slug: str, module_slug: str, section_slug: str, user: CurrentUser = Depends(get_current_user), uow: SqlModelUnitOfWork = Depends(get_uow)):
     completion = await LearnerProgressUseCases(lambda: uow).mark_text_complete(user.id, course_slug, module_slug, section_slug)
     return ApiResponse(data={"section_id": str(completion.section_id), "status": "COMPLETED"}, meta={})
 
 
-@router.patch("/{section_slug}", response_model=ApiResponse[SectionRead], deprecated=True)
 @admin_router.patch("/{section_slug}", response_model=ApiResponse[SectionRead])
 async def update_section(
     course_slug: str,
@@ -205,7 +198,6 @@ async def update_section(
     return ApiResponse(data=section_read(section), meta={"resource": "section"})
 
 
-@router.delete("/{section_slug}", status_code=status.HTTP_204_NO_CONTENT, deprecated=True)
 @admin_router.delete("/{section_slug}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_section(
     course_slug: str,

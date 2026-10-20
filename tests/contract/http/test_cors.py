@@ -15,7 +15,7 @@ async def test_dashboard_preflight_allows_all_dashboard_headers():
     """
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         response = await client.options(
-            "/api/v1/servers",
+            "/api/admin/servers",
             headers={
                 "Origin": DASHBOARD_ORIGIN,
                 "Access-Control-Request-Method": "GET",
